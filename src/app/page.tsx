@@ -1,103 +1,161 @@
-import Image from "next/image";
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import GlassCard from "@/components/GlassCard";
+import { supabase } from "@/lib/supabaseClient";
 
-export default function Home() {
+export default function LoginPage() {
+  // DÜZELTME: "yetili" -> "yetkili" olarak düzeltildi.
+  const [activeTab, setActiveTab] = useState<"personel" | "yetkili">("personel");
+  const router = useRouter();
+
+  // Yetkili girişi için state'ler
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Personel formu için state'ler
+  const [tc, setTc] = useState("");
+  const [personnelEmail, setPersonnelEmail] = useState("");
+  
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      router.push("/dashboard");
+    }
+    setLoading(false);
+  };
+  
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div
+      className="min-h-screen w-full flex items-center justify-center p-4 bg-cover bg-center"
+      style={{ backgroundImage: "url('/backgrounds/bg1.jpg')" }}
+    >
+      <main className="w-full max-w-md">
+        <GlassCard opacity={15} blurPx={16} borderRadiusPx={16}>
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white">İK Yönetim Portalı</h1>
+            <p className="text-gray-300 mt-2">İzin süreçlerinizi kolayca yönetin.</p>
+          </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+          <div className="flex bg-white/10 rounded-lg p-1 mb-6">
+            <button
+              onClick={() => setActiveTab("personel")}
+              className={`w-1/2 p-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "personel" ? "bg-white/20 text-white" : "text-gray-300 hover:bg-white/5"
+              }`}
+            >
+              Personel İzin Talebi
+            </button>
+            <button
+              onClick={() => setActiveTab("yetkili")}
+              className={`w-1/2 p-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "yetkili" ? "bg-white/20 text-white" : "text-gray-300 hover:bg-white/5"
+              }`}
+            >
+              Yetkili Girişi
+            </button>
+          </div>
+
+          {activeTab === "personel" ? (
+            <form className="space-y-4">
+              <div>
+                <label htmlFor="tc" className="block text-sm font-medium text-gray-200 mb-1">
+                  T.C. Kimlik Numarası
+                </label>
+                <input
+                  type="text"
+                  id="tc"
+                  name="tc"
+                  maxLength={11}
+                  value={tc}
+                  onChange={(e) => setTc(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="11 haneli T.C. kimlik numaranız"
+                />
+              </div>
+              <div>
+                <label htmlFor="email_personel" className="block text-sm font-medium text-gray-200 mb-1">
+                  E-posta Adresi
+                </label>
+                <input
+                  type="email"
+                  id="email_personel"
+                  name="email"
+                  value={personnelEmail}
+                  onChange={(e) => setPersonnelEmail(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="sistemde kayıtlı e-postanız"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+              >
+                İzin Talebi Oluştur
+              </button>
+            </form>
+          ) : (
+            <form className="space-y-4" onSubmit={handleLogin}>
+              <div>
+                <label
+                  htmlFor="email_yetkili"
+                  className="block text-sm font-medium text-gray-200 mb-1"
+                >
+                  E-posta Adresi
+                </label>
+                <input
+                  type="email"
+                  id="email_yetkili"
+                  name="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="ornek@sirket.com"
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-200 mb-1"
+                >
+                  Şifre
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+              <button
+                type="submit"
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-green-800"
+                disabled={loading}
+              >
+                {loading ? "Giriş Yapılıyor..." : "Giriş Yap"}
+              </button>
+            </form>
+          )}
+        </GlassCard>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
