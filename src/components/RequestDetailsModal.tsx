@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from 'react';
-import { X, Check, Trash2, User, Calendar, History, MessageSquare, Edit } from 'lucide-react';
+import { X, Check, Trash2, User, Calendar, History, Edit } from 'lucide-react';
 import { coordinatorApprove, coordinatorReject, adminApprove, adminReject, updateLeaveRequestDates } from '@/app/actions';
 import toast from 'react-hot-toast';
 import type { LeaveRequest } from '@/app/dashboard/requests/page';
@@ -21,7 +21,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
   const [newStartDate, setNewStartDate] = useState(request.start_date);
   const [newEndDate, setNewEndDate] = useState(request.end_date);
   const [workingDays, setWorkingDays] = useState<number | null>(null);
-
+  
   useEffect(() => {
     const calculateDays = async () => {
       const { data: holidaysData } = await supabase.from('official_holidays').select('date');
@@ -32,7 +32,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     };
     calculateDays();
   }, [request.start_date, request.end_date, supabase, weekendConfiguration]);
-
+  
   const handleAction = async (action: 'approve' | 'reject') => {
     setIsSubmitting(true);
     let result;
@@ -58,7 +58,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     }
     setIsSubmitting(false);
   };
-
+  
   const handleUpdateDates = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -67,7 +67,6 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     formData.append('original_dates', originalDates);
     
     const result = await updateLeaveRequestDates(formData);
-
     if (result.success) {
       toast.success(result.message);
       setIsEditingDates(false);
@@ -85,7 +84,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
 
   const approveText = profile?.role === 'admin' ? 'Nihai Onay' : 'Koordinatör Onayı';
   const rejectText = profile?.role === 'admin' ? 'Nihai Red' : 'Koordinatör Reddi';
-
+  
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800/80 border border-white/10 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] flex flex-col">
@@ -121,16 +120,16 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                     </div>
                   </div>
                 </form>
-              ) : (
+               ) : (
                 <div className="flex items-center gap-2">
                   <div>
                     <p className="text-sm text-gray-400">İzin Tarihleri</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-lg">
+                       <p className="font-semibold text-lg">
                         {new Date(request.start_date).toLocaleDateString('tr-TR')} - {new Date(request.end_date).toLocaleDateString('tr-TR')}
                       </p>
                       {workingDays !== null && (
-                        <span className="text-sm text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
+                         <span className="text-sm text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
                           {workingDays} iş günü
                         </span>
                       )}
@@ -138,7 +137,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                   </div>
                   {canEditDates && (
                      <button onClick={() => setIsEditingDates(true)} className="p-1 rounded-full hover:bg-white/10 ml-2 self-center"><Edit size={16}/></button>
-                  )}
+                   )}
                 </div>
               )}
             </div>
@@ -149,7 +148,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
             {request.history_log?.map((log, index) => (
               <div key={index} className="border-l-2 pl-4 border-gray-600">
                 <p className="font-semibold">{log.action} <span className="text-sm font-normal text-gray-400">- {log.actor}</span></p>
-                <p className="text-sm text-gray-300 italic">"{log.notes}"</p>
+                <p className="text-sm text-gray-300 italic">&quot;{log.notes}&quot;</p>
                 <p className="text-xs text-gray-500 mt-1">{new Date(log.timestamp).toLocaleString('tr-TR')}</p>
               </div>
             ))}
@@ -175,7 +174,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                 >
                   <Trash2 size={16} /> {rejectText}
                 </button>
-                <button 
+                 <button 
                   onClick={() => handleAction('approve')}
                   disabled={isSubmitting}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600/80 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"

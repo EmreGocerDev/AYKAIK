@@ -5,9 +5,8 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { ChevronLeft, ChevronRight, Filter, Search, X, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import GlassCard from '@/components/GlassCard';
-import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';    
+import { saveAs } from 'file-saver';
 
 const statusStyles = {
     'çalıştı': { fullName: 'Çalıştı', abbr: 'Ç', className: 'bg-green-500/20 text-green-300' },
@@ -55,11 +54,10 @@ export default function TimesheetPage() {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [expandedPersonnelId, setExpandedPersonnelId] = useState<number | null>(null);
     const [isExporting, setIsExporting] = useState(false);
-
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
     const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i), []);
     const monthDays = useMemo(() => Array.from({ length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth()) }, (_, i) => i + 1), [currentDate]);
-
+    
     useEffect(() => {
         const fetchRegions = async () => {
             const { data, error } = await supabase.from('regions').select('id, name');
@@ -68,17 +66,20 @@ export default function TimesheetPage() {
         };
         fetchRegions();
     }, [supabase]);
-const handleYearChange = (year: number) => {
-    setCurrentDate(prev => {
-        const newDate = new Date(prev);
-        newDate.setFullYear(year);
-        return newDate;
-    });
-};
-const clearFilters = () => {
-    setSelectedRegion('');
-    setSearchQuery('');
-};
+    
+    const handleYearChange = (year: number) => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            newDate.setFullYear(year);
+            return newDate;
+        });
+    };
+    
+    const clearFilters = () => {
+        setSelectedRegion('');
+        setSearchQuery('');
+    };
+    
     const fetchTimesheet = useCallback(async (date: Date, regionId: string, search: string) => {
         setLoading(true);
         try {
@@ -87,6 +88,7 @@ const clearFilters = () => {
             let personnelQuery = supabase.from('personnel').select('id, full_name, tc_kimlik_no, regions(name)');
             if (profile.role === 'coordinator') personnelQuery = personnelQuery.eq('region_id', profile.region_id);
             if (regionId) personnelQuery = personnelQuery.eq('region_id', Number(regionId));
+ 
             if (search) personnelQuery = personnelQuery.ilike('full_name', `%${search}%`);
 
             const { data: personnelData, error: personnelError } = await personnelQuery.order('full_name');
@@ -102,32 +104,27 @@ const clearFilters = () => {
             const personnelIds = personnelData.map(p => p.id);
             const startDate = new Date(date.getFullYear(), 0, 1);
             const endDate = new Date(date.getFullYear(), 11, 31);
-
             const [leavesRes, holidaysRes] = await Promise.all([
                 supabase.from('leave_requests').select('personnel_id, start_date, end_date, leave_type').in('personnel_id', personnelIds).eq('status', 'approved'),
                 supabase.from('official_holidays').select('date').gte('date', startDate.toISOString()).lte('date', endDate.toISOString())
             ]);
-            
             if (leavesRes.error) throw leavesRes.error;
             if (holidaysRes.error) throw holidaysRes.error;
             
             setHolidays(new Set(holidaysRes.data.map(h => h.date)));
-            
             const combinedData = personnelData.map(person => {
-    // Supabase'in [ { name: '...' } ] olarak gönderdiği diziyi { name: '...' } objesine çeviriyoruz.
-    const regionObject = Array.isArray(person.regions) ? person.regions[0] : person.regions;
+                const regionObject = Array.isArray(person.regions) ? person.regions[0] : person.regions;
 
-    return {
-        ...person,
-        personnel_id: person.id,
-        regions: regionObject || null, // Tek bir obje veya null olarak ayarla
-        approved_leaves: leavesRes.data.filter(l => l.personnel_id === person.id),
-    };
-});
-// TypeScript'i ikna etmek için 'unknown' üzerinden bir cast yapıyoruz.
-setTimesheetData(combinedData as unknown as TimesheetData[]);
+                return {
+                    ...person,
+                    personnel_id: person.id,
+                    regions: regionObject || null,
+                    approved_leaves: leavesRes.data.filter(l => l.personnel_id === person.id),
+                };
+            });
+            setTimesheetData(combinedData as unknown as TimesheetData[]);
             setDailyStatusCache(new Map());
-        } catch (error: any) {
+        } catch (error) {
             toast.error("Puantaj verileri çekilemedi.");
             console.error("Puantaj Hatası:", error);
         } finally {
@@ -141,7 +138,7 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
         }, 300);
         return () => clearTimeout(timer);
     }, [currentDate, selectedRegion, searchQuery, fetchTimesheet]);
-
+    
     const getDayStatus = useCallback((person: TimesheetData, year: number, month: number, day: number): LeaveStatus => {
         const cacheKey = `${person.personnel_id}-${year}-${month}-${day}`;
         if (dailyStatusCache.has(cacheKey)) {
@@ -164,11 +161,13 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
             if (isoDate >= leave.start_date && isoDate <= leave.end_date) {
                 const cleanLeaveType = leave.leave_type?.trim().toLowerCase() as LeaveStatus;
                 if (statusStyles[cleanLeaveType]) {
-                    dailyStatusCache.set(cacheKey, cleanLeaveType); return cleanLeaveType;
+                    dailyStatusCache.set(cacheKey, cleanLeaveType);
+                    return cleanLeaveType;
                 }
             }
         }
-        dailyStatusCache.set(cacheKey, 'çalıştı'); return 'çalıştı';
+        dailyStatusCache.set(cacheKey, 'çalıştı');
+        return 'çalıştı';
     }, [dailyStatusCache, holidays, weekendConfiguration]);
 
     const calculateSummary = useCallback((person: TimesheetData): SummaryCounts => {
@@ -193,12 +192,6 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
         return counts;
     }, [currentDate, getDayStatus, showWholeYear, months]);
     
-    // YENİ: Sütunları içeriğe göre otomatik boyutlandıran yardımcı fonksiyon
-    
-
-    // YENİ: Otomatik sütun boyutlandırma eklenmiş ve geliştirilmiş export fonksiyonu
-  
-    // YENİ: ExcelJS kullanarak stil (renk, boyut) özellikli tam rapor oluşturan fonksiyon
     const handleExport = async () => {
         setIsExporting(true);
         const toastId = toast.loading("Renkli Excel raporu oluşturuluyor...");
@@ -209,15 +202,13 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
 
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
-
-            // Başlık Stil Tanımlamaları
-            const headerStyle = {
+            const headerStyle: Partial<ExcelJS.Style> = {
                 font: { bold: true, color: { argb: 'FFFFFFFF' } },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A5568' } } as ExcelJS.Fill,
-                alignment: { horizontal: 'center', vertical: 'middle' } as ExcelJS.Alignment,
+                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A5568' } },
+                alignment: { horizontal: 'center', vertical: 'middle' },
             };
 
-            const cellStyle = (status: LeaveStatus) => {
+            const cellStyle = (status: LeaveStatus): Partial<ExcelJS.Style> => {
                 const colors: { [key: string]: { textColor: string, bgColor: string } } = {
                     'çalıştı': { textColor: 'FF68D391', bgColor: 'FF2F5242' },
                     'yıllık izin': { textColor: 'FF63B3ED', bgColor: 'FF2C5282' },
@@ -230,71 +221,59 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
                 const color = colors[status] || { textColor: 'FFFFFFFF', bgColor: 'FF000000' };
                 return {
                     font: { color: { argb: color.textColor } },
-                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: color.bgColor } } as ExcelJS.Fill,
-                    alignment: { horizontal: 'center', vertical: 'middle' } as ExcelJS.Alignment,
+                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: color.bgColor } },
+                    alignment: { horizontal: 'center', vertical: 'middle' },
                 }
             };
-
-            // Sütun Başlıklarını Oluştur
-            const headers = [
+            
+            const headers: Partial<ExcelJS.Column>[] = [
                 { header: 'Personel Adı', key: 'name', width: 30 },
                 { header: 'T.C. Kimlik No', key: 'tc', width: 15 },
                 { header: 'Bölge', key: 'region', width: 20 },
             ];
-
             const daysInPeriod = showWholeYear 
                 ? months.flatMap(m => Array.from({ length: getDaysInMonth(year, m) }, (_, d) => ({ month: m, day: d + 1 })))
                 : Array.from({ length: getDaysInMonth(year, month) }, (_, d) => ({ month: month, day: d + 1 }));
-
             daysInPeriod.forEach(d => {
                 const headerText = showWholeYear ? `${d.day}.${d.month + 1}` : `${d.day}`;
                 headers.push({ header: headerText, key: `day_${d.month}_${d.day}`, width: 5 });
             });
-
             const summaryHeaders = Object.values(statusStyles).map(s => ({
                 header: s.fullName, key: s.fullName, width: 15
             }));
             headers.push(...summaryHeaders);
             worksheet.columns = headers;
 
-            // Veri Satırlarını Ekle ve Stillendir
             for (const person of timesheetData) {
                 const summary = calculateSummary(person);
-                const rowData: any = {
+                const rowData: Record<string, string | number> = {
                     name: person.full_name,
                     tc: person.tc_kimlik_no,
                     region: person.regions?.name || 'N/A',
                 };
-                
                 daysInPeriod.forEach(d => {
                     rowData[`day_${d.month}_${d.day}`] = statusStyles[getDayStatus(person, year, d.month, d.day)].abbr;
                 });
-
                 summaryHeaders.forEach(h => {
                     const statusKey = Object.keys(statusStyles).find(key => statusStyles[key as LeaveStatus].fullName === h.header) as LeaveStatus;
                     rowData[h.key] = summary[statusKey] || 0;
                 });
-                
                 const row = worksheet.addRow(rowData);
 
-                // Hücreleri stillendir
-                daysInPeriod.forEach((d, index) => {
+                daysInPeriod.forEach(d => {
                     const cell = row.getCell(`day_${d.month}_${d.day}`);
                     const status = getDayStatus(person, year, d.month, d.day);
                     cell.style = cellStyle(status);
                 });
             }
 
-            // Başlık satırını stillendir
             worksheet.getRow(1).eachCell(cell => {
                 cell.style = headerStyle;
             });
             
-            // Dosyayı oluştur ve indir
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             saveAs(blob, `Puantaj_Raporu_${currentDate.toLocaleDateString('tr-TR', {month: 'long', year: 'numeric'})}.xlsx`);
-
             toast.success("Rapor başarıyla oluşturuldu!", { id: toastId });
 
         } catch (error) {
@@ -313,6 +292,7 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
                         <FileDown size={16} />
                         <span>{isExporting ? 'Oluşturuluyor...' : 'Excel\'e Aktar'}</span>
                     </button>
+             
                     <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg">
                         <select value={currentDate.getFullYear()} onChange={(e) => handleYearChange(Number(e.target.value))} className="bg-transparent text-xl font-semibold border-none focus:ring-0">
                             {years.map(year => (<option key={year} value={year}>{year}</option>))}
@@ -373,6 +353,7 @@ setTimesheetData(combinedData as unknown as TimesheetData[]);
                                                 )}
                                             </tr>
                                         </thead>
+                              
                                         <tbody>
                                             {timesheetData.map(person => {
                                                 const year = currentDate.getFullYear();

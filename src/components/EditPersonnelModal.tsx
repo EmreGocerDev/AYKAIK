@@ -18,7 +18,7 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
   const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
   const [regions, setRegions] = useState<Region[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   useEffect(() => {
     const fetchRegions = async () => {
       const { data, error } = await supabase.from('regions').select('*');
@@ -27,7 +27,7 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
     };
     fetchRegions();
   }, [supabase]);
-
+  
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -43,14 +43,14 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
     }
     setIsSubmitting(false);
   };
-
-  const inputClass = "w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none";
   
+  const inputClass = "w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none";
   const formatDateForInput = (dateString?: string | null) => {
     if (!dateString) return '';
     try {
         return new Date(dateString).toISOString().split('T')[0];
-    } catch (e) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_e) {
         return '';
     }
   }
@@ -71,7 +71,6 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
           </button>
         </div>
 
-        {/* DÜZELTME: className'e 'flex-1' eklendi */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 -mr-2">
             <input type="hidden" name="id" value={personnelToEdit.id} />
             <div className="space-y-6">

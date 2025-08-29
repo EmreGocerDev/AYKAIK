@@ -6,7 +6,8 @@ import { createLeaveForPersonnel } from '@/app/actions';
 import { X, CalendarPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import GlassCard from './GlassCard';
-import type { Personnel } from '@/app/dashboard/personnel/page';
+// DÜZELTME: Personnel tipi, doğru yer olan @/types/index dosyasından import edildi.
+import type { Personnel } from '@/types/index';
 
 type ModalProps = {
   personnel: Personnel;
@@ -31,7 +32,6 @@ export default function CreateLeaveModal({ personnel, onClose }: ModalProps) {
     }
     setIsSubmitting(false);
   };
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <GlassCard

@@ -7,7 +7,6 @@ import GlassCard from '@/components/GlassCard';
 import ConfirmModal from '@/components/ConfirmModal';
 import AddUserModal from '@/components/AddUserModal';
 import EditUserModal from '@/components/EditUserModal';
-// YENİ: getUserProfiles fonksiyonu actions'tan import ediliyor
 import { deleteUser, getUserProfiles } from '@/app/actions';
 import toast from 'react-hot-toast';
 
@@ -18,6 +17,16 @@ type UserProfile = {
   region_id: number;
   email: string; 
   regions: { name: string } | null; 
+};
+
+// RPC'den dönen veri için bir tip oluşturalım
+type UserProfileRpcResponse = {
+    id: string;
+    full_name: string;
+    role: string;
+    region_id: number;
+    email: string;
+    region_name: string;
 };
 
 export default function UsersPage() {
@@ -31,22 +40,20 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     
-    // DEĞİŞİKLİK: Veri artık doğrudan Supabase'ten değil, Server Action üzerinden çekiliyor.
     const { data, error } = await getUserProfiles();
       
-    if (error) {
+    if (error || !data) {
       toast.error('Kullanıcılar yüklenemedi.');
-      // Hata artık boş bir obje değil, sunucudan gelen gerçek hata olacak.
       console.error(error);
     } else {
-      const formattedData = data.map((user: any) => ({
+      
+      const formattedData = data.map((user: UserProfileRpcResponse) => ({
         ...user,
         regions: { name: user.region_name }
       }));
       setUsers(formattedData as UserProfile[]);
     }
     setLoading(false);
-  // DEĞİŞİKLİK: useCallback'in bağımlılıkları arasından supabase kaldırıldı.
   }, []);
 
   useEffect(() => {

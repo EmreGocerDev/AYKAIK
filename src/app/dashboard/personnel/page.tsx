@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from 'react';
+import { useEffect, useState, useCallback, Fragment, ReactNode } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Plus, Edit, Trash2, CalendarPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import GlassCard from '@/components/GlassCard';
@@ -16,7 +16,7 @@ import type { Personnel } from '@/types/index';
 const PAGE_SIZE = 10;
 
 // Detayları göstermek için yardımcı bileşen
-const DetailRow = ({ label, value }: { label: string, value: any }) => {
+const DetailRow = ({ label, value }: { label: string, value: ReactNode }) => {
     if (value === null || value === undefined || value === '') return null;
     return (
         <div>
@@ -37,7 +37,6 @@ export default function PersonnelPage() {
   const [personnelToEdit, setPersonnelToEdit] = useState<Personnel | null>(null);
   const [personnelForLeave, setPersonnelForLeave] = useState<Personnel | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
-
   const fetchPersonnel = useCallback(async (page: number) => {
     setLoading(true);
     const from = (page - 1) * PAGE_SIZE;
@@ -52,20 +51,18 @@ export default function PersonnelPage() {
     if (error) {
       toast.error("Personel listesi yüklenemedi.");
     } else {
+  
       setPersonnelList(data as Personnel[]);
       setTotalPersonnel(count || 0);
     }
     setLoading(false);
   }, [supabase]);
-
   useEffect(() => {
     fetchPersonnel(currentPage);
   }, [fetchPersonnel, currentPage]);
-  
   const refreshList = () => {
     fetchPersonnel(currentPage);
   };
-
   const handleConfirmDelete = async () => {
     if (!personnelToDelete) return;
     const toastId = toast.loading('Personel siliniyor...');
@@ -120,6 +117,7 @@ export default function PersonnelPage() {
                       <th className="p-4 text-right">İşlemler</th>
                     </tr>
                   </thead>
+                
                   
                   {personnelList.length > 0 ? (
                     personnelList.map((person) => {
@@ -156,6 +154,7 @@ export default function PersonnelPage() {
                               </div>
                           </td>
                         </tr>
+              
                         {isExpanded && (
                           <tr className="bg-black/20">
                             <td colSpan={6} className="p-4">

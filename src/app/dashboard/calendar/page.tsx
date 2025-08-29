@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import RequestDetailsModal from '@/components/RequestDetailsModal';
 import type { LeaveRequest } from '../requests/page';
 import { User as UserIcon } from 'lucide-react';
+import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
 
 type CalendarEvent = {
   title: string;
@@ -25,12 +26,10 @@ type CalendarEvent = {
     originalRequest?: LeaveRequest;
   }
 };
-
 type Personnel = {
   id: number;
   full_name: string;
 };
-
 export default function CalendarPage() {
   const { supabase } = useSettings();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -41,7 +40,8 @@ export default function CalendarPage() {
 
   useEffect(() => {
     const fetchPersonnel = async () => {
-      const { data, error } = await supabase
+      // DÜZELTME: Kullanılmayan error değişkeni kaldırıldı.
+      const { data } = await supabase
         .from('personnel')
         .select('id, full_name')
         .order('full_name');
@@ -58,7 +58,7 @@ export default function CalendarPage() {
         personnel_filter_id: personnelId ? Number(personnelId) : null,
         region_filter_id: null,
         search_query: null,
-        limit_val: 10000, // Takvimde tüm sonuçları göstermek için yüksek bir limit
+        limit_val: 10000,
         offset_val: 0
       }),
       supabase.from('official_holidays').select('name, date')
@@ -116,9 +116,9 @@ export default function CalendarPage() {
     fetchCalendarData(selectedPersonnelId);
   }, [selectedPersonnelId, fetchCalendarData]);
 
-  const handleEventClick = (clickInfo: any) => {
+  const handleEventClick = (clickInfo: EventClickArg) => {
     if (clickInfo.event.extendedProps.originalRequest) {
-      setSelectedRequest(clickInfo.event.extendedProps.originalRequest);
+      setSelectedRequest(clickInfo.event.extendedProps.originalRequest as LeaveRequest);
     }
   };
   
@@ -127,7 +127,7 @@ export default function CalendarPage() {
     fetchCalendarData(selectedPersonnelId);
   };
 
-  const renderEventContent = (eventInfo: any) => {
+  const renderEventContent = (eventInfo: EventContentArg) => {
     return (
       <div className='w-full overflow-hidden whitespace-nowrap text-ellipsis'>
         <UserIcon size={12} className="inline-block mr-1" />

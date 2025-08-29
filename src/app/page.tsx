@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useActionState } from "react";
+import { useState, useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import GlassCard from "@/components/GlassCard";
 import { createLeaveRequest, login, type LoginState } from "./actions";
@@ -8,7 +8,6 @@ import toast from "react-hot-toast";
 
 function LoginSubmitButton() {
   const { pending } = useFormStatus();
-
   return (
     <button 
       type="submit" 
@@ -43,11 +42,9 @@ export default function LoginPage() {
       toast.error(result.message);
     }
   };
-  
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-cover bg-center" style={{ backgroundImage: "url('/wallpaper1.png')" }}>
       <main className="w-full max-w-md">
-        {/* GÜNCELLENDİ: GlassCard stilleri isteğiniz doğrultusunda değiştirildi. */}
         <GlassCard 
           tintValue={15} 
           blurPx={50} 
@@ -82,6 +79,7 @@ export default function LoginPage() {
                 <label htmlFor="email_personel" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
                 <input type="email" id="email_personel" name="email_personel" required value={personnelEmail} onChange={(e) => setPersonnelEmail(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="sistemde kayıtlı e-postanız" />
               </div>
+ 
               <div>
                 <label htmlFor="leave_type" className="block text-sm font-medium text-gray-200 mb-1">İzin Türü</label>
                 <select name="leave_type" id="leave_type" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none">
@@ -92,6 +90,7 @@ export default function LoginPage() {
                   <option value="raporlu">Raporlu (İstirahat)</option>
                 </select>
               </div>
+   
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="w-full sm:w-1-2">
                   <label htmlFor="start_date" className="block text-sm font-medium text-gray-200 mb-1">Başlangıç Tarihi</label>
@@ -107,7 +106,7 @@ export default function LoginPage() {
               </button>
             </form>
           ) : (
-             <form action={loginFormAction} className="space-y-4">
+            <form action={loginFormAction} className="space-y-4">
                 <div>
                   <label htmlFor="email_yetkili" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
                   <input type="email" id="email_yetkili" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="ornek@sirket.com" />
@@ -116,6 +115,7 @@ export default function LoginPage() {
                   <label htmlFor="password"  className="block text-sm font-medium text-gray-200 mb-1">Şifre</label>
                   <input type="password" id="password" name="password" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
                 </div>
+     
                 {loginState?.message && <p className="text-sm text-red-400 text-center">{loginState.message}</p>}
                 <LoginSubmitButton />
              </form>

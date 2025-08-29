@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
-// YENİ: İkonlar import edildi
 import { Plus, Edit, Trash2, FileDown } from 'lucide-react';
 import GlassCard from '@/components/GlassCard';
 import AddRegionModal from '@/components/AddRegionModal';
@@ -10,7 +9,6 @@ import EditRegionModal from '@/components/EditRegionModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import { deleteRegion } from '@/app/actions';
 import toast from 'react-hot-toast';
-// YENİ: Excel kütüphanesi import edildi
 import * as XLSX from 'xlsx';
 
 type Region = { 
@@ -29,7 +27,6 @@ export default function RegionsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [regionToEdit, setRegionToEdit] = useState<Region | null>(null);
   const [regionToDelete, setRegionToDelete] = useState<Region | null>(null);
-
   const fetchRegions = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from('regions').select('*').order('name');
@@ -37,7 +34,6 @@ export default function RegionsPage() {
     else setRegions(data as Region[]);
     setLoading(false);
   }, [supabase]);
-
   useEffect(() => { fetchRegions() }, [fetchRegions]);
 
   const handleConfirmDelete = async () => {
@@ -52,15 +48,12 @@ export default function RegionsPage() {
     }
     setRegionToDelete(null);
   };
-
-  // YENİ: Excel'e aktarma fonksiyonu
   const handleExportToExcel = () => {
     if (regions.length === 0) {
       toast.error("Aktarılacak veri bulunmuyor.");
       return;
     }
 
-    // Excel için veriyi hazırlıyoruz
     const dataToExport = regions.map((region, index) => ({
       'SIRA NO': index + 1,
       'BÖLGE ADI': region.name,
@@ -69,39 +62,30 @@ export default function RegionsPage() {
       'ÇALIŞILAN İL': region.province || '',
       'SGK İL KODU': region.sgk_province_code || ''
     }));
-
-    // Veriyi bir çalışma sayfasına dönüştürüyoruz
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    
-    // Yeni bir çalışma kitabı oluşturup sayfayı ekliyoruz
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Bölgeler');
-    
-    // Kullanıcıya dosyayı indiriyoruz
     XLSX.writeFile(workbook, 'Bölgeler_Listesi.xlsx');
   };
-
-
   return (
     <>
       <div className="p-4 md:p-8 text-white">
         <div className="max-w-4xl mx-auto">
-          {/* YENİ: Butonlar div içine alındı */}
           <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
             <h1 className="text-3xl font-bold">Bölge Yönetimi</h1>
             <div className="flex gap-2">
-              <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                 <Plus size={16} />
                 <span>Yeni Bölge Ekle</span>
               </button>
-              {/* YENİ: Excel'e aktarma butonu */}
               <button 
                 onClick={handleExportToExcel} 
                 disabled={regions.length === 0}
                 className="flex items-center gap-2 bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileDown size={16} />
-                <span>Excel'e Aktar</span>
+                <span>Excel&apos;e Aktar</span>
               </button>
             </div>
           </div>
@@ -137,7 +121,7 @@ export default function RegionsPage() {
         onClose={() => setRegionToDelete(null)}
         onConfirm={handleConfirmDelete}
         title="Bölgeyi Sil"
-        message={`'${regionToDelete?.name}' adlı bölgeyi silmek istediğinizden emin misiniz?`}
+        message={`“${regionToDelete?.name}” adlı bölgeyi silmek istediğinizden emin misiniz?`}
       />
     </>
   );

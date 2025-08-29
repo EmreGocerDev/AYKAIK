@@ -4,13 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { UserCog } from "lucide-react"; 
 
+// Tipleri tanımlayalım
+type HistoryEntry = {
+  action: string;
+  actor: string;
+  timestamp: string;
+  notes: string;
+};
 
 export type LoginState = {
   message: string | null;
 };
-
 export async function createLeaveRequest(formData: FormData) {
   const supabase = createAdminClient();
   const rawFormData = {
@@ -20,26 +25,23 @@ export async function createLeaveRequest(formData: FormData) {
     end_date: formData.get("end_date") as string,
     leave_type: formData.get("leave_type") as string,
   };
-
   const { data: personnel, error: personnelError } = await supabase
     .from("personnel")
     .select("id")
     .eq("tc_kimlik_no", rawFormData.tc)
     .eq("email", rawFormData.email_personel)
     .single();
-
   if (personnelError || !personnel) {
     console.error("Personel doğrulama hatası:", personnelError);
     return { success: false, message: "Personel bilgileri hatalı veya bulunamadı." };
   }
   
-  const initialHistory = [{
+  const initialHistory: HistoryEntry[] = [{
     action: "Talep oluşturuldu",
     actor: "Personel",
     timestamp: new Date().toISOString(),
     notes: `Talep, personel tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
   }];
-
   const { error: insertError } = await supabase.from("leave_requests").insert({
     personnel_id: personnel.id,
     start_date: rawFormData.start_date,
@@ -48,7 +50,6 @@ export async function createLeaveRequest(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
-
   if (insertError) {
     return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
   }
@@ -60,12 +61,10 @@ export async function login(prevState: LoginState, formData: FormData) {
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
   const supabase = createClient();
-
   const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
-
   if (error) {
     return {
       message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
@@ -83,7 +82,6 @@ export async function addPersonnel(formData: FormData) {
     .select('value')
     .eq('key', 'default_annual_leave_days')
     .single();
-
   if (settingError) {
     return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
   }
@@ -118,7 +116,6 @@ export async function addPersonnel(formData: FormData) {
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
   };
-
   if (!rawFormData.full_name || !rawFormData.tc_kimlik_no) {
     return { success: false, message: 'Ad Soyad ve T.C. Kimlik Numarası zorunludur.' };
   }
@@ -143,7 +140,6 @@ export async function deletePersonnel(personnelId: number) {
     .from('personnel')
     .delete()
     .eq('id', personnelId);
-
   if (error) {
     console.error('Personel silme hatası:', error);
     return { success: false, message: `Veritabanı hatası: ${error.message}` };
@@ -177,6 +173,7 @@ export async function updatePersonnel(formData: FormData) {
     number_of_children: Number(formData.get('number_of_children')),
     agi_yüzdesi: formData.get('agi_yüzdesi') as string,
     engel_derecesi: formData.get('engel_derecesi') as string,
+ 
     address: formData.get('address') as string,
     phone_number: formData.get('phone_number') as string,
     education_level: formData.get('education_level') as string,
@@ -190,12 +187,10 @@ export async function updatePersonnel(formData: FormData) {
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
   };
-
   const { error } = await supabase
     .from('personnel')
     .update(rawFormData)
     .eq('id', id);
-
   if (error) {
     console.error("Personel güncelleme hatası:", error);
     if (error.code === '23505') {
@@ -219,13 +214,11 @@ async function updateLeaveRequest(
 
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: "Yetkili profili bulunamadı." };
-
   const { data: currentRequest, error: fetchError } = await supabase
     .from('leave_requests')
     .select('history_log, leave_type')
     .eq('id', requestId)
     .single();
-
   if (fetchError) return { success: false, message: "İzin talebi bulunamadı." };
   
   const actorName = profile.full_name || user.email;
@@ -235,22 +228,18 @@ async function updateLeaveRequest(
       approved: "Nihai Onay Verildi",
       rejected: "Nihai Red Verildi"
   };
-
-  const newHistoryEntry = {
+  const newHistoryEntry: HistoryEntry = {
     action: actionTextMap[newStatus],
     actor: `${actorName} (${profile.role})`,
     timestamp: new Date().toISOString(),
     notes: notes || "Not eklenmedi.",
   };
-  const updatedHistoryLog = [...(currentRequest.history_log as any[] || []), newHistoryEntry];
-
+  const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
   const { error: updateError } = await supabase
     .from('leave_requests')
     .update({ status: newStatus, history_log: updatedHistoryLog })
     .eq('id', requestId);
-
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
-
   if (newStatus === 'approved') {
     const adminSupabase = createAdminClient();
     const { error: rpcError } = await adminSupabase.rpc('generate_timesheet_for_leave', { request_id: requestId });
@@ -285,31 +274,27 @@ export async function updateLeaveRequestDates(formData: FormData) {
   const newStartDate = formData.get('start_date') as string;
   const newEndDate = formData.get('end_date') as string;
   const originalDates = formData.get('original_dates') as string;
-
   if (!requestId || !newStartDate || !newEndDate) {
     return { success: false, message: 'Eksik bilgi.' };
   }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
-
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
   const { data: currentRequest, error: fetchError } = await supabase
     .from('leave_requests').select('history_log').eq('id', requestId).single();
-
   if (fetchError) return { success: false, message: 'Talep bulunamadı.' };
 
   const actorName = profile.full_name || user.email;
-  const newHistoryEntry = {
+  const newHistoryEntry: HistoryEntry = {
     action: "Tarih Güncellendi",
     actor: `${actorName} (${profile.role})`,
     timestamp: new Date().toISOString(),
     notes: `İzin tarihi değiştirildi. Eski: ${originalDates}, Yeni: ${new Date(newStartDate).toLocaleDateString('tr-TR')} - ${new Date(newEndDate).toLocaleDateString('tr-TR')}`,
   };
-  const updatedHistoryLog = [...(currentRequest.history_log as any[] || []), newHistoryEntry];
-
+  const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
   const { error: updateError } = await supabase
     .from('leave_requests')
     .update({ 
@@ -318,7 +303,6 @@ export async function updateLeaveRequestDates(formData: FormData) {
       history_log: updatedHistoryLog 
     })
     .eq('id', requestId);
-
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
 
   revalidatePath('/dashboard/requests');
@@ -335,21 +319,18 @@ export async function createLeaveForPersonnel(formData: FormData) {
     reason: formData.get('reason') as string,
     leave_type: formData.get("leave_type") as string,
   };
-
   if (!personnelId || !rawFormData.start_date || !rawFormData.end_date || !rawFormData.leave_type) {
     return { success: false, message: 'Eksik bilgi. Lütfen tüm alanları doldurun.' };
   }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
-
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
   const actorName = profile.full_name || user.email;
   const actor = `${actorName} (${profile.role})`;
-
-  const initialHistory = [{
+  const initialHistory: HistoryEntry[] = [{
     action: "Talep oluşturuldu",
     actor: actor,
     timestamp: new Date().toISOString(),
@@ -365,7 +346,6 @@ export async function createLeaveForPersonnel(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
-
   if (error) {
     return { success: false, message: `Veritabanı hatası: ${error.message}` };
   }
@@ -385,11 +365,9 @@ export async function addRegion(formData: FormData) {
     province: formData.get('province') as string,
     sgk_province_code: formData.get('sgk_province_code') as string,
   };
-
   if (!rawFormData.name) return { success: false, message: 'Bölge adı boş olamaz.' };
   
   const { error } = await supabase.from('regions').insert(rawFormData);
-
   if (error) return { success: false, message: `Hata: ${error.message}` };
   
   revalidatePath('/dashboard/regions');
@@ -399,7 +377,6 @@ export async function addRegion(formData: FormData) {
 export async function updateRegion(formData: FormData) {
   const supabase = createClient();
   const id = Number(formData.get('id'));
-
   const rawFormData = {
     name: formData.get('name') as string,
     workplace_registration_number: formData.get('workplace_registration_number') as string,
@@ -407,9 +384,7 @@ export async function updateRegion(formData: FormData) {
     province: formData.get('province') as string,
     sgk_province_code: formData.get('sgk_province_code') as string,
   };
-
   if (!id || !rawFormData.name) return { success: false, message: 'Gerekli bilgiler eksik.' };
-
   const { error } = await supabase.from('regions').update(rawFormData).eq('id', id);
 
   if (error) return { success: false, message: `Hata: ${error.message}` };
@@ -425,9 +400,7 @@ export async function deleteRegion(regionId: number) {
     .select('id')
     .eq('region_id', regionId)
     .limit(1);
-
   if (checkError) return { success: false, message: `Kontrol hatası: ${checkError.message}` };
-
   if (personnel && personnel.length > 0) {
     return { success: false, message: 'Bu bölgede personel bulunduğu için silinemez. Önce personelleri başka bir bölgeye taşıyın.' };
   }
@@ -445,11 +418,10 @@ export async function updateSystemSettings(formData: FormData) {
     { key: 'default_annual_leave_days', value: formData.get('default_annual_leave_days') },
     { key: 'weekend_configuration', value: formData.get('weekend_configuration') }
   ];
-
   try {
     for (const setting of settingsToUpdate) {
       if (setting.value !== null) {
-        let processedValue: any = setting.value;
+        let processedValue: string | number = setting.value as string;
         if (setting.key === 'default_annual_leave_days') {
           processedValue = Number(setting.value);
         }
@@ -467,10 +439,16 @@ export async function updateSystemSettings(formData: FormData) {
     revalidatePath('/dashboard/timesheet');
     return { success: true, message: 'Ayarlar başarıyla güncellendi.' };
 
-  } catch (error: any) {
-    return { success: false, message: `Ayarlar güncellenemedi: ${error.message}` };
+  } catch (error) {
+    let message = 'Bilinmeyen bir hata oluştu.';
+    if (error instanceof Error) {
+        message = `Ayarlar güncellenemedi: ${error.message}`;
+    }
+    return { success: false, message };
   }
 }
+// src/app/actions.ts DOSYASININ SONUNA EKLEYİN
+
 export async function createUser(formData: FormData) {
   const adminSupabase = createAdminClient();
 
@@ -496,7 +474,6 @@ export async function createUser(formData: FormData) {
   }
 
   // 2. 'profiles' tablosuna 'upsert' ile veriyi ekle/güncelle
-  // DEĞİŞİKLİK: .insert() yerine .upsert() kullanıldı
   const { error: profileError } = await adminSupabase.from('profiles').upsert({
     id: authData.user.id,
     full_name,
@@ -551,17 +528,15 @@ export async function deleteUser(userId: string) {
   revalidatePath('/dashboard/users');
   return { success: true, message: 'Kullanıcı kalıcı olarak silindi.' };
 }
+
 export async function getUserProfiles() {
-  // En yüksek yetkilere sahip admin client'ı oluşturuyoruz.
   const supabase = createAdminClient();
   
-  // Önceden oluşturduğumuz RPC fonksiyonunu admin yetkileriyle çağırıyoruz.
   const { data, error } = await supabase.rpc('get_user_profiles');
 
   if (error) {
     console.error("Server Action getUserProfiles Hatası:", error);
   }
   
-  // Veri ve hatayı geri döndürüyoruz.
   return { data, error };
 }

@@ -10,16 +10,23 @@ import toast from 'react-hot-toast';
 
 export type LeaveRequestStatus = 'pending' | 'approved_by_coordinator' | 'rejected_by_coordinator' | 'approved' | 'rejected';
 
+type HistoryEntry = {
+  action: string;
+  actor: string;
+  timestamp: string;
+  notes: string;
+};
+
 export type LeaveRequest = {
   id: number;
   start_date: string;
   end_date: string;
   status: LeaveRequestStatus;
   created_at: string;
-  history_log: any[];
+  history_log: HistoryEntry[];
   leave_type: string;
   personnel_full_name: string; 
-  total_count: number; // RPC'den gelen toplam kayıt sayısı
+  total_count: number;
 };
 
 type Region = { id: number; name: string; };
@@ -50,6 +57,7 @@ export default function LeaveRequestsPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [totalRequests, setTotalRequests] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
 
   useEffect(() => {
     const fetchRegions = async () => {
@@ -78,38 +86,37 @@ export default function LeaveRequestsPage() {
       setTotalRequests(0);
     } else {
       setRequests(data as LeaveRequest[]);
-      // Gelen ilk kayıttaki toplam sayıyı al, tüm kayıtlarda aynıdır.
       setTotalRequests(data?.[0]?.total_count || 0);
     }
     setLoading(false);
   }, [supabase]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Filtre veya arama değiştiğinde her zaman 1. sayfaya dön
-      setCurrentPage(1); 
-      fetchLeaveRequests(1, selectedRegion, searchQuery);
-    }, 300);
+      const timer = setTimeout(() => {
+          setDebouncedSearchQuery(searchQuery);
+          setCurrentPage(1);
+      }, 300);
+      return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-    return () => clearTimeout(timer);
-  }, [selectedRegion, searchQuery, fetchLeaveRequests]);
-  
-  // Sadece sayfa değiştiğinde veri çekmek için ayrı bir useEffect
   useEffect(() => {
-    fetchLeaveRequests(currentPage, selectedRegion, searchQuery);
-  }, [currentPage, fetchLeaveRequests]);
+      setCurrentPage(1);
+  }, [selectedRegion]);
 
+  useEffect(() => {
+    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery);
+  }, [currentPage, selectedRegion, debouncedSearchQuery, fetchLeaveRequests]);
 
   const handleModalClose = () => {
     setSelectedRequest(null);
-    fetchLeaveRequests(currentPage, selectedRegion, searchQuery);
+    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery);
   }
 
   const clearFilters = () => {
     setSelectedRegion('');
     setSearchQuery('');
   };
-
+  
   return (
     <>
       <div className="p-4 md:p-8 text-white">

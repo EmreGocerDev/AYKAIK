@@ -16,22 +16,24 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data, error } = await supabase.from('system_settings').select('key, value');
+      // DÜZELTME: Kullanılmayan error değişkeni kaldırıldı.
+      const { data } = await supabase.from('system_settings').select('key, value');
       if (data) {
         const settingsObject = data.reduce((acc, { key, value }) => {
-          acc[key] = value;
+          acc[key as keyof SystemSettings] = value;
           return acc;
-        }, {} as any);
+        }, {} as SystemSettings);
         setSettings(settingsObject);
       }
-      setLoading(false);
+ 
+       setLoading(false);
     };
     fetchSettings();
   }, [supabase]);
-
+  
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -44,7 +46,7 @@ export default function AdminSettingsPage() {
     }
     setIsSubmitting(false);
   };
-
+  
   if (loading) return <div className="p-8 text-white">Ayarlar yükleniyor...</div>;
 
   return (
@@ -66,11 +68,12 @@ export default function AdminSettingsPage() {
                   className="w-full md:w-1/3 bg-black/20 p-3 rounded-lg border border-white/10"
                 />
               </div>
+ 
               
-              {/* YENİ: Hafta Sonu Ayarı */}
               <div>
                 <label className="block text-lg font-semibold mb-2">Hafta Sonu Tatili</label>
                 <p className="text-sm text-gray-400 mb-2">Puantaj ve iş günü hesaplamalarında hangi günlerin hafta sonu olarak sayılacağını seçin.</p>
+  
                 <div className="flex gap-6">
                     <label className="flex items-center gap-2">
                         <input type="radio" name="weekend_configuration" value="saturday_sunday" defaultChecked={settings?.weekend_configuration === 'saturday_sunday'} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"/>
