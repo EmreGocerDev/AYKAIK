@@ -1,0 +1,3479 @@
+﻿===== C:\Users\emreg\ik-yonetim-sistemi\src\app\actions.ts =====
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from 'next/navigation';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { calculateWorkingDays } from "@/lib/utils";
+
+export type LoginState = {
+  message: string | null;
+};
+
+export async function createLeaveRequest(formData: FormData) {
+  const supabase = createAdminClient();
+
+  const rawFormData = {
+    tc: formData.get("tc") as string,
+    email_personel: formData.get("email_personel") as string,
+    start_date: formData.get("start_date") as string,
+    end_date: formData.get("end_date") as string,
+    leave_type: formData.get("leave_type") as string,
+  };
+
+  const { data: personnel, error: personnelError } = await supabase
+    .from("personnel")
+    .select("id")
+    .eq("tc_kimlik_no", rawFormData.tc)
+    .eq("email", rawFormData.email_personel)
+    .single();
+
+  if (personnelError || !personnel) {
+    console.error("Personel doğrulama hatası:", personnelError);
+    return { success: false, message: "Personel bilgileri hatalı veya bulunamadı." };
+  }
+  
+  const initialHistory = [{
+    action: "Talep oluşturuldu",
+    actor: "Personel",
+    timestamp: new Date().toISOString(),
+    notes: `Talep, personel tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
+  }];
+
+  const { error: insertError } = await supabase.from("leave_requests").insert({
+    personnel_id: personnel.id,
+    start_date: rawFormData.start_date,
+    end_date: rawFormData.end_date,
+    status: "pending",
+    history_log: initialHistory,
+    leave_type: rawFormData.leave_type,
+  });
+
+  if (insertError) {
+    return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
+  }
+  
+  return { success: true, message: "İzin talebiniz başarıyla oluşturuldu." };
+}
+
+export async function login(prevState: LoginState, formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const supabase = createClient();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return {
+      message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
+    };
+  }
+
+  revalidatePath('/', 'layout');
+  redirect('/dashboard');
+}
+
+export async function addPersonnel(formData: FormData) {
+  const supabase = createClient();
+
+  const { data: setting, error: settingError } = await supabase
+    .from('system_settings')
+    .select('value')
+    .eq('key', 'default_annual_leave_days')
+    .single();
+
+  if (settingError) {
+    return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
+  }
+  const defaultLeaveDays = Number(setting.value);
+
+  const rawFormData = {
+    full_name: formData.get('full_name') as string,
+    tc_kimlik_no: formData.get('tc_kimlik_no') as string,
+    email: formData.get('email') as string,
+    start_date: formData.get('start_date') as string,
+    region_id: Number(formData.get('region_id')),
+    annual_leave_days_entitled: defaultLeaveDays,
+  };
+
+  if (!rawFormData.full_name || !rawFormData.tc_kimlik_no || !rawFormData.email) {
+    return { success: false, message: 'Lütfen tüm zorunlu alanları doldurun.' };
+  }
+
+  const { error } = await supabase.from('personnel').insert([
+    rawFormData,
+  ]);
+  
+  if (error) {
+    console.error("Personel ekleme hatası:", error);
+    if (error.code === '23505') {
+        return { success: false, message: 'Bu T.C. Kimlik Numarası veya E-posta zaten kayıtlı.' };
+    }
+    return { success: false, message: `Veritabanı hatası: ${error.message}` };
+  }
+
+  revalidatePath('/dashboard/personnel');
+  return { success: true, message: 'Personel başarıyla eklendi.' };
+}
+
+export async function deletePersonnel(personnelId: number) {
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from('personnel')
+    .delete()
+    .eq('id', personnelId);
+
+  if (error) {
+    console.error('Personel silme hatası:', error);
+    return { success: false, message: `Veritabanı hatası: ${error.message}` };
+  }
+
+  revalidatePath('/dashboard/personnel');
+  revalidatePath('/dashboard');
+  return { success: true, message: 'Personel başarıyla silindi.' };
+}
+
+export async function updatePersonnel(formData: FormData) {
+  const supabase = createClient();
+
+  const id = Number(formData.get('id'));
+  if (!id) {
+    return { success: false, message: 'Personel ID bulunamadı.' };
+  }
+
+  const rawFormData = {
+    full_name: formData.get('full_name') as string,
+    tc_kimlik_no: formData.get('tc_kimlik_no') as string,
+    email: formData.get('email') as string,
+    start_date: formData.get('start_date') as string,
+    region_id: Number(formData.get('region_id')),
+  };
+
+  const { error } = await supabase
+    .from('personnel')
+    .update(rawFormData)
+    .eq('id', id);
+
+  if (error) {
+    console.error("Personel güncelleme hatası:", error);
+    if (error.code === '23505') {
+      return { success: false, message: 'Bu T.C. Kimlik Numarası veya E-posta zaten başka bir personele ait.' };
+    }
+    return { success: false, message: `Veritabanı hatası: ${error.message}` };
+  }
+
+  revalidatePath('/dashboard/personnel');
+  return { success: true, message: 'Personel bilgileri başarıyla güncellendi.' };
+}
+
+async function updateLeaveRequest(
+  requestId: number, 
+  newStatus: 'approved_by_coordinator' | 'rejected_by_coordinator' | 'approved' | 'rejected', 
+  notes: string
+) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "Yetkili kullanıcı bulunamadı." };
+
+  const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
+  if (!profile) return { success: false, message: "Yetkili profili bulunamadı." };
+
+  const { data: currentRequest, error: fetchError } = await supabase
+    .from('leave_requests')
+    .select('history_log, leave_type')
+    .eq('id', requestId)
+    .single();
+  if (fetchError) return { success: false, message: "İzin talebi bulunamadı." };
+  
+  const actorName = profile.full_name || user.email;
+  const actionTextMap = {
+      approved_by_coordinator: "Koordinatör Onayladı",
+      rejected_by_coordinator: "Koordinatör Reddetti",
+      approved: "Nihai Onay Verildi",
+      rejected: "Nihai Red Verildi"
+  };
+
+  const newHistoryEntry = {
+    action: actionTextMap[newStatus],
+    actor: `${actorName} (${profile.role})`,
+    timestamp: new Date().toISOString(),
+    notes: notes || "Not eklenmedi.",
+  };
+  const updatedHistoryLog = [...(currentRequest.history_log as any[] || []), newHistoryEntry];
+
+  const { error: updateError } = await supabase
+    .from('leave_requests')
+    .update({ status: newStatus, history_log: updatedHistoryLog })
+    .eq('id', requestId);
+
+  if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
+
+  if (newStatus === 'approved') {
+    const adminSupabase = createAdminClient();
+    const { error: rpcError } = await adminSupabase.rpc('generate_timesheet_for_leave', { request_id: requestId });
+    if (rpcError) {
+        console.error("Puantaj güncelleme RPC hatası:", rpcError);
+    }
+  }
+  
+  revalidatePath('/dashboard/requests');
+  revalidatePath('/dashboard/calendar');
+  revalidatePath('/dashboard/timesheet');
+  return { success: true, message: `Talep başarıyla güncellendi.` };
+}
+
+export async function coordinatorApprove(requestId: number, notes: string) {
+  return updateLeaveRequest(requestId, 'approved_by_coordinator', notes);
+}
+export async function coordinatorReject(requestId: number, notes: string) {
+  return updateLeaveRequest(requestId, 'rejected_by_coordinator', notes);
+}
+export async function adminApprove(requestId: number, notes: string) {
+  return updateLeaveRequest(requestId, 'approved', notes);
+}
+export async function adminReject(requestId: number, notes: string) {
+  return updateLeaveRequest(requestId, 'rejected', notes);
+}
+
+export async function updateLeaveRequestDates(formData: FormData) {
+  const supabase = createClient();
+
+  const requestId = Number(formData.get('requestId'));
+  const newStartDate = formData.get('start_date') as string;
+  const newEndDate = formData.get('end_date') as string;
+  const originalDates = formData.get('original_dates') as string;
+  
+  if (!requestId || !newStartDate || !newEndDate) {
+    return { success: false, message: 'Eksik bilgi.' };
+  }
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+
+  const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
+  if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
+  
+  const { data: currentRequest, error: fetchError } = await supabase
+    .from('leave_requests').select('history_log').eq('id', requestId).single();
+  if (fetchError) return { success: false, message: 'Talep bulunamadı.' };
+
+  const actorName = profile.full_name || user.email;
+  const newHistoryEntry = {
+    action: "Tarih Güncellendi",
+    actor: `${actorName} (${profile.role})`,
+    timestamp: new Date().toISOString(),
+    notes: `İzin tarihi değiştirildi. Eski: ${originalDates}, Yeni: ${new Date(newStartDate).toLocaleDateString('tr-TR')} - ${new Date(newEndDate).toLocaleDateString('tr-TR')}`,
+  };
+  const updatedHistoryLog = [...(currentRequest.history_log as any[] || []), newHistoryEntry];
+
+  const { error: updateError } = await supabase
+    .from('leave_requests')
+    .update({ 
+      start_date: newStartDate, 
+      end_date: newEndDate, 
+      history_log: updatedHistoryLog 
+    })
+    .eq('id', requestId);
+
+  if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
+
+  revalidatePath('/dashboard/requests');
+  revalidatePath('/dashboard/calendar');
+  return { success: true, message: 'İzin tarihleri güncellendi.' };
+}
+
+export async function createLeaveForPersonnel(formData: FormData) {
+  const supabase = createClient();
+
+  const personnelId = Number(formData.get('personnel_id'));
+  const rawFormData = {
+    start_date: formData.get('start_date') as string,
+    end_date: formData.get('end_date') as string,
+    reason: formData.get('reason') as string,
+    leave_type: formData.get("leave_type") as string,
+  };
+
+  if (!personnelId || !rawFormData.start_date || !rawFormData.end_date || !rawFormData.leave_type) {
+    return { success: false, message: 'Eksik bilgi. Lütfen tüm alanları doldurun.' };
+  }
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+
+  const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
+  if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
+  
+  const actorName = profile.full_name || user.email;
+  const actor = `${actorName} (${profile.role})`;
+
+  const initialHistory = [{
+    action: "Talep oluşturuldu",
+    actor: actor,
+    timestamp: new Date().toISOString(),
+    notes: rawFormData.reason || `Talep, yetkili tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
+  }];
+
+  const { error } = await supabase.from('leave_requests').insert({
+    personnel_id: personnelId,
+    start_date: rawFormData.start_date,
+    end_date: rawFormData.end_date,
+    status: "pending",
+    reason: rawFormData.reason,
+    history_log: initialHistory,
+    leave_type: rawFormData.leave_type,
+  });
+
+  if (error) {
+    return { success: false, message: `Veritabanı hatası: ${error.message}` };
+  }
+
+  revalidatePath('/dashboard/requests');
+  revalidatePath('/dashboard/calendar');
+  revalidatePath('/dashboard');
+  return { success: true, message: 'İzin talebi başarıyla oluşturuldu.' };
+}
+
+export async function addRegion(formData: FormData) {
+  const supabase = createClient();
+  const name = formData.get('name') as string;
+
+  if (!name) return { success: false, message: 'Bölge adı boş olamaz.' };
+
+  const { error } = await supabase.from('regions').insert({ name });
+
+  if (error) return { success: false, message: `Hata: ${error.message}` };
+  
+  revalidatePath('/dashboard/regions');
+  return { success: true, message: 'Bölge başarıyla eklendi.' };
+}
+
+export async function updateRegion(formData: FormData) {
+  const supabase = createClient();
+  const id = Number(formData.get('id'));
+  const name = formData.get('name') as string;
+
+  if (!id || !name) return { success: false, message: 'Gerekli bilgiler eksik.' };
+
+  const { error } = await supabase.from('regions').update({ name }).eq('id', id);
+
+  if (error) return { success: false, message: `Hata: ${error.message}` };
+
+  revalidatePath('/dashboard/regions');
+  return { success: true, message: 'Bölge başarıyla güncellendi.' };
+}
+
+export async function deleteRegion(regionId: number) {
+  const supabase = createClient();
+
+  const { data: personnel, error: checkError } = await supabase
+    .from('personnel')
+    .select('id')
+    .eq('region_id', regionId)
+    .limit(1);
+
+  if (checkError) return { success: false, message: `Kontrol hatası: ${checkError.message}` };
+  if (personnel && personnel.length > 0) {
+    return { success: false, message: 'Bu bölgede personel bulunduğu için silinemez. Önce personelleri başka bir bölgeye taşıyın.' };
+  }
+
+  const { error } = await supabase.from('regions').delete().eq('id', regionId);
+
+  if (error) return { success: false, message: `Hata: ${error.message}` };
+
+  revalidatePath('/dashboard/regions');
+  return { success: true, message: 'Bölge başarıyla silindi.' };
+}
+
+export async function updateSystemSettings(formData: FormData) {
+  const supabase = createClient();
+  
+  const settingsToUpdate = [
+    { key: 'default_annual_leave_days', value: formData.get('default_annual_leave_days') },
+    { key: 'weekend_configuration', value: formData.get('weekend_configuration') }
+  ];
+
+  try {
+    for (const setting of settingsToUpdate) {
+      if (setting.value !== null) {
+        let processedValue: any = setting.value;
+        if (setting.key === 'default_annual_leave_days') {
+          processedValue = Number(setting.value);
+        }
+
+        const { error } = await supabase
+          .from('system_settings')
+          .update({ value: processedValue })
+          .eq('key', setting.key);
+        
+        if (error) throw error;
+      }
+    }
+    
+    revalidatePath('/dashboard/settings');
+    revalidatePath('/dashboard/calendar');
+    revalidatePath('/dashboard/timesheet');
+    
+    return { success: true, message: 'Ayarlar başarıyla güncellendi.' };
+
+  } catch (error: any) {
+    return { success: false, message: `Ayarlar güncellenemedi: ${error.message}` };
+  }
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\favicon.ico =====
+         (  F          (  n  00     (-  �         �  �F  (                                                           $   ]   �   �   ]   $                                       �   �   �   �   �   �   �   �                           8   �   �   �   �   �   �   �   �   �   �   8                  �   �   �   �   �   �   �   �   �   �   �   �              �   �   �   �   �   �   �   �   �   �   �   �   �   �       #   �   �   �OOO�������������������������ggg�   �   �   �   #   Y   �   �   ��������������������������555�   �   �   �   Y   �   �   �   �   �kkk���������������������   �   �   �   �   �   �   �   �   �   �			������������������   �   �   �   �   �   Y   �   �   �   �   �JJJ���������kkk�   �   �   �   �   �   Y   #   �   �   �   �   ����������			�   �   �   �   �   �   #       �   �   �   �   �   �111�DDD�   �   �   �   �   �   �              �   �   �   �   �   �   �   �   �   �   �   �                  8   �   �   �   �   �   �   �   �   �   �   8                           �   �   �   �   �   �   �   �                                       $   ]   �   �   ]   $                                                                                                                                                                                                                                                                                    (       @                                                                               ,   U   �   �   �   �   U   ,                                                                                      *   �   �   �   �   �   �   �   �   �   �   �   �   *                                                                      �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                          Q   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   Q                                               r   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   r                                       r   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   r                               O   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   O                          �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                      �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �               (   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   '           �   �   �   �   �   �   �888���������������������������������������������������������___�   �   �   �   �   �   �   �          �   �   �   �   �   �   ����������������������������������������������������������SSS�   �   �   �   �   �   �   �      +   �   �   �   �   �   �   �   �hhh�����������������������������������������������������   �   �   �   �   �   �   �   �   +   T   �   �   �   �   �   �   �   ��������������������������������������������������,,,�   �   �   �   �   �   �   �   �   T   �   �   �   �   �   �   �   �   �   �GGG���������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �+++���������������������������������jjj�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ����������������������������������   �   �   �   �   �   �   �   �   �   �   �   T   �   �   �   �   �   �   �   �   �   �   ��������������������������III�   �   �   �   �   �   �   �   �   �   �   �   T   +   �   �   �   �   �   �   �   �   �   �   �   �hhh����������������������   �   �   �   �   �   �   �   �   �   �   �   +      �   �   �   �   �   �   �   �   �   �   �   ������������������,,,�   �   �   �   �   �   �   �   �   �   �   �   �          �   �   �   �   �   �   �   �   �   �   �   �   �GGG�������������   �   �   �   �   �   �   �   �   �   �   �   �   �           '   �   �   �   �   �   �   �   �   �   �   �   �   ����������   �   �   �   �   �   �   �   �   �   �   �   �   (               �   �   �   �   �   �   �   �   �   �   �   �   �333�___�   �   �   �   �   �   �   �   �   �   �   �   �   �                      �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                          O   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   O                               r   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   r                                       r   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   r                                               Q   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   Q                                                          �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                      *   �   �   �   �   �   �   �   �   �   �   �   �   *                                                                                      ,   U   �   �   �   �   U   ,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               (   0   `           -                                                                                             	   (   L   j   �   �   �   �   j   K   (   	                                                                                                                                          V   �   �   �   �   �   �   �   �   �   �   �   �   �   �   U                                                                                                                      %   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   &                                                                                                      �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                                          Q   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   R                                                                              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                     �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                             �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                     �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                       P   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   O                                  �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                       #   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   #                   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                  �   �   �   �   �   �   �   �   �   �$$$�hhh�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�eee�PPP��   �   �   �   �   �   �   �   �   �              U   �   �   �   �   �   �   �   �   �   ������������������������������������������������������������������������������������������sss�   �   �   �   �   �   �   �   �   �   �   U           �   �   �   �   �   �   �   �   �   �   �   �eee��������������������������������������������������������������������������������������   �   �   �   �   �   �   �   �   �   �   �       	   �   �   �   �   �   �   �   �   �   �   �   ����������������������������������������������������������������������������������HHH�   �   �   �   �   �   �   �   �   �   �   �   �   	   (   �   �   �   �   �   �   �   �   �   �   �   �   �EEE�����������������������������������������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   (   K   �   �   �   �   �   �   �   �   �   �   �   �   �   �������������������������������������������������������������������������,,,�   �   �   �   �   �   �   �   �   �   �   �   �   �   L   j   �   �   �   �   �   �   �   �   �   �   �   �   �   �)))���������������������������������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   j   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ������������������������������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ����������������������������������������������������������iii�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �eee������������������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ��������������������������������������������������HHH�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   j   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �EEE���������������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   j   L   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �����������������������������������������,,,�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   K   (   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �)))�������������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   (   	   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ����������������������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   	       �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ��������������������������iii�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �           U   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �eee����������������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   U              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ������������������HHH�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                  �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �EEE�������������   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                   #   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   ���������,,,�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   #                       �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �222�}}}�   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                  O   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   P                                       �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                              �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                     �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                             �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                     �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                              R   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   Q                                                                                          �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �                                                                                                      &   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   �   %                                                                                                                      U   �   �   �   �   �   �   �   �   �   �   �   �   �   �   V                                                                                                                                          	   (   K   j   �   �   �   �   j   L   (   	                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        �PNG
+
+   
+IHDR         \r�f   sRGB ���   8eXIfMM *    �i            �       �           D"8s  IDATx�]	�ՙn�]<QVA���h$	�N��13*�q��d�č�I���D�L2��(�(Ԙ2�ę�G	��q_@屈��xț�Џ��{o�������U�{}�O��;������9�d���(Dg��8	��N �]��@�hx�?v 
+�N�3�=`;�6�.�&��u��  ��6�P��н��@�àR� P�iZq�^DN���wp�
+���X�hИHg@��
+:��|�5` p"@�'�ɲ�s{
+�p�*�2����� d ү���|(0�
+0 �>K�
+�xX�6 IJ� �C|?$KEN�}ϓ|������h $	2 ��|/� . Nz �#���W�e�
+�5��
+����ܶ���;�y �� �g�s�h^  I�� DL(�;�8��Hjg�cH|x�1��R"�a���Ӂ� G��@��9`/`%0�
+H�@j�~,���K
+�,t).��I���D�T�O�)~��V�u$b 誛
+�U%�7������ _�$b 8A������J�3` 510wQ�?��vr���:�2�K�@ ��v*{%#��A�Z�咁^(��=�g \��W�����!:��,`�6��643�:@�c.Fٟ����u?�<��'������_܏vp: �8Q��
+I�Ł�
+p{3���kHȢ�G�����c�Ѽ
+<�62&�
+��2uC�����敭��T�3�
+��
+���;���d�/~m��.��X�@{�w.��d]G�� {lK��Eb���(P�RuM�T�C����
+�d��])��_Lm�=��=@b���K��GUk�^�U�������)1����g�T���m`9�\����Q��@����Ⱆ6�:ڞ�^�w�����E�D�� �	�5����F�,��
+�X"�d�m�<�nB~��@����t�t�x��
+�;�f�>����I8����8��C1۪$B���e���+��jl��EZ��& ��S:�:�6�m����\G1��`���!�nl�l�Ɗ�^�Q`�@Oc�S��@e�ͷ���qb�p���S��@up���F�D@�Г������2@#����L3 �A��$H2� _h��FH#rq(��O�D�򤬈���runGOWa�b� &�SgD�3�ED�to�*Ǥ����9k��~)���,$� x�R�1�v�K ��9�D䍁U(�w�&LE��ꩻ�S)��3�Y8x8 $.i�(��K�ŀY����a�]����4��ǀ	c����@3�f����4� Ƣ��
+�/*b��� ���$!I�~��7�B*-1`	o � �	�$��ǡD�����L������ �J"���OQ��)��2@#�x4�"$e ���I�8��Oi��8�"� �G��8[x�t<�.��7&�m&؎R�^��tq� ؕ�.���Y�-2� �d� ��*_��&d|j\�W�b ��G����*g�� ��釁�F4�"I�؃�/ b1q�N����Y�D��p���9���p�}w\� �Ԥ���1 j`��O���xK=��H�� �A��1
+�#�
+D:U8j���t���$b b�A||�U�Q��26%��)1 ��_
+�ꢳ!~D��� ��+b >A��:]�E$��50��GDhR�t����ݻwR�)��P� ��n$� 3���@bS�Nu�,Y�j�ʲ��:����;�����@�`�|�-[)�'OV��Ն�sFxڮ��ۥ�n}͛7�����~��ƺ�:���Q��J_��UKj8�q0x���;v4 ̞=[�hW=�	��	�&�!e5�8hѢE��w�]�����6���_�iW}�SZ�?	�/`�;vl�}��2 <�h�" ����A�܁�X,�m۶�+V�(��<�w���#F�^��;���aH�c ��)S�*�{a���p��c89(�^����4�&E��oÆ
+��W�/��u�=�^���*?{k^�_E�����z��g�� UI-���{WU*
+�:p�9.tڷo(/ݺus>��3�'�^�Rg���ڞG��I_D�������~~� ��{
+���?N0�7�S��.ƍ׸�~?}/y]nA;�أ���2 ]�FOB2C?�_I����[�:�:�=#�OzK�-� ��ϣ�%����?j��I���P�ۯ��{N�-hU��t�:������� ,���G�K�-hU���c�hP7 ����@�n?�\�-�k�.���2�:�� �`��F��=�-�V�_�G��܂V� ��}�0 WI����F��ʭ���sM�rZ�8pJ�Q�*@OK8���
+rZ��ݖa, ��w� �S�W^y����.��5�at7��ݏ���Tv#�~7n��A"�����+��W��pM��/�hK8����g��F/^������M{e ��R�|�)q��7�t��?8'���K��P~���瞰�\��r��>�ǷUk �eP��|�^x����
+�/V/��v��������*�p�v�� ����ʟ]J��}��k8(������ĉ�ѣGǗ�O�mڴq,X�o���e.�^ �Qx���p�t����4^_�N�{�����y�2 �s����� �-عsg�s���i�v��Z
+8
+!~PJ?�c�������|�] �ܽ{��z�긓R��1pn���z����tlp�9�f�r�v�jT殿�z�4*O�L�~����ԕ3��4�~~�r�;�m�xY�+���������3 r�;�m�x�4���:7]ՁqL�4)U��!r�1��u�6���$�
+�7����8�w��̙3Ǹ|5�>?�\z��O���͆� ��,�E����3�����2���[����2Wu:E�����^p.H1cJ�t�]}��B�u��SOu�����Ic�O�����%� 
+ �AZ������k����D?�5 �@Q��
+���3�w�+��"��T��S��Uޥ�13��?��5 M'݋��>p��Z�j�~fj�
+׈�סԐ�n�����>� ��i5D�[bf ��~a�'�`Xc��� -�1�k����āI�������k��Q�ů|�k�M��(92�@�t�����݂X-�Lדa��N4��qܞ'$f0@�
+@V�nA�ܘY�L9:�|/^s� ��	��)0`�j��T\w�uZ-����¨\�	@�:��c�t���{�-��Rb��1%� �I,Y%T���~��r�1����C��,�$��*ˀ���f<��0z����h�F���� ����|���8Z-�CR����Tg� �HRf��glY����s��-��p��'+����m�_ؒg������C�{ �	����Ȫ�ϏΙ3g�-�GR|׹7`G��񥡘�0�U��_ٵZЏ�د�D�)���\>����ʗ������z N���@��~~��-��P��{rs���@�<����|.]�Ը|��m|g����_��y�W�KD1�b�M���%�s\����r�1��n�\�ƒ�"-� �`.4��~%3��I}[0A��$��= -�>BH"G�ۏ�^r��<�EBG�i �%���9�@^�~~
+@�����1����@� t�-[����{%@C�$�mAg���Κ5kʆх����/双O��l��ӿ��B�@.X���u�p�O��6��x�9MPn�`߷o_���^n�`t�
+��(�����\r��s�A�y���ۂ�T��@h
+�E0l�0��;�tڵӘkƸN����Y�jU��
+S#�|^㽺- |��p�
+N�.���ޥ`�^{�zL�6��4 �ě�b��e�]&"�d�sΜ9Uޥ�U0�!
+��*nP�*`���o֨v����i8G�����hh��m������ɓ�s�=�{J�U0�Ղ���wZ������������8bEz���,Y�D��![C�>}��7:k׮
+�no��f� >jvR?#b��X�(��F�AT�F��i��[�{��zv��>��C���a+�[0B2�D��=��G~�(
+�ĺ������LO�\s�܂>"8|�`[)
+&Lp8�'��������4 oGe�#�ۏ�lْ_\�D̀܂�2Z�l��i�9��
+t�ȑ9f ޢ�-����=���Y�y��n?uQ�}Xͬ�sA�i >=��1�=R��+� +
+�܂��.2 ��K������CƢۃ20h� �˫%53�5@�MA�%���̣������j[��9�;�� _(�����0��~r���\�{�m�P����x#TT9��n?����N#��ץ&�}� ��)
+�T�VL�!���j���`�p
+ �8@Rr�UAV�A����=��-����pLH�`@n�*Ȋ1�܂U���?}w
+ ]�H2@�ߴi��V���[�˯%�������5 �8�)Э
+T`��|rZbZ-�.�!da+@� ���ߞ�Z�gf�[0p���� �� I��gr�$��o%P�_rCy
+�V�|߽����"m�Y���-�[ l��k xA� ��ۯ9]�[pҤI�Ȩ�pP���k ��Feِ���gHE�d�nAm"Z�$��5}���z�8����2r�X�|� ��Sܻw��r�J�s�J�~�T�f�z{ �ͫ ��x�j?j��Q�E�n� �js���|G�xз�<dXt(��Q�E�.�p�47 ��)���;��ys�_�V�D���-XTi���?� �~�薜����� �`Q�=V�?���^�
+������.]�|X�
+�m�B~��?���J� �D�������~�h r�����ER���A݀�B���~w�q�Ӿ}���<�ŕ[й5�d��-�`�5 ?�Kq�~l4��0@��)����/I��(���؋���n��9���Y�4�!�Cو2ח*w9���GKݐ�s�&�r�e��s��?�6�8J� |(�uwO䴁d�&K)�nA��?R���n@7,��8�=���r�e����n�M�69k��M7�����J��R�]�e�n��9���Z���� /?នo>��󕾤�rzr�� ��`���V{���u��4448�V��ra��p� ��QRZ�<{�dK.F9��#~T���s.����N%*� 
+���Ýu�8G&����/W:*x%�{�}@�
+ ��l���Nc#�AI�������i����*?�د�0}�g���C"Āpۯ������4薒ҏ(b�8�_Q�Y� ���r7'���`��� �j �6� *��3�W�g��"��l�
+�1�:�Sg}%� �	��P?����1`�����Y� ��"��D�0b@�� �����9������[t��F1���p`k�\U�`��R��A#W81 e`)R�ZM��� ��[u��F0�	rq.����� #^�=C"Ā9P'�R~f�� �
+pn�zdC"�e���?�\K����@&$b }jz�3۵� x/{��1 Ra�#�|��ƟUK�= &�^��TM�n�2�9�5)?s���{O'�D��D��o [kM�oK0�x�� �Td�_@]b r� �G�����; ����D��D���1�gaR�`��'`0�  �>\��/���f��������ŀ����!fn�Z�|b����U�.t���ट���r�9�+��������	�b rnE�Dk�= ��8����!b R�Cl�P�E�`�܌�K�'~�@���}*�!`�@��6 L�
+�;��	$b@D��?#��g�F�
+��V��1�v��;�Es��Q����=ɮ�4���b@T��n��!��3q�0^�V�� c ��1�ܶ��[����M�=8I����1@�څ@Cu��`N�o�� WJĀ� W����e��I�� n��N�mீ��ܴ�_d��(�4`E܅I� ���"̵�1 *3�+\�E� �\M���)g	r���
+���8�>��p�?vI� �0�ǀ~�!b������$'�%"I����R��i�1 �0��? S~&�� �r�����{ n�_�����L�?��T�e��Ǝ�7�C"r��OQ~"qI� ��O 8�?$b �܋r�#@�_�v�J̙��/��3�'d�/����W[����o'N�
+�l��-2� ���@j�O~��0���2` H�@�؄��+����pOB� �uO��(l�S�ԕ���9���~�c�:x/�Xd�.���Ɣ�d ��V�y@F $H2� ����+M*�i��l8O@F $H2� ���2�4& r�
+PO��֢����7N�YS
+ ����Y�1`��;�JS3n� g[�'��@W@"la`32�n?'�HB2p
+�hām�mu �����j@F@��V����Z!��xI���H�y�ѱ)��>��Z!6 ��a�`�����dDV$9f���	pM�6�I�!LG:\LdrwPy�~�P�%��L3��7�TK��Am�mo|�6��	3��-�h J3��?�67 �yr���"����g��4. $�1���_�[*��&���S/�dq�������C��h �3��>�6Ŷ%������\�#�RZq�
+�=lK|ŔX��X�WS�e j5 /����$���:��v@������8��
+�d��1(�z2~F�)���3��͋���l��C�������#����=�.\Lt? %� N$9b�%�:���2��u	 �1|-�	ld�����t $b��@?���@� �F�c��ρ^�D�d�[9�ࠐz����:
+H�@ ��P2v )~���@����z5��|����R�ֵ���|`#�W39؂��<�"-�0��\<�d��u�oGLz 1��Gp���e�倯d� .�j
+H�@j�F�3��@ c{s<��J&	�@�����b���w��  �� ��n���v��< �����,M;��*p>p!0hH��{=�����x�]I�� DLh����<'��h8�@V �#��J���f� I�� �Hn����W�}�N�t[u�$�������� �
+@� 2 	�]&)�� #�3���,	=%�T���k�&�  I�����I��ӳ� �[8	�	�L�]�]t�T�g���6�-@b2 U�OV��:
+ 
+A?��
+} .i�|	�xC���rv�w; ��#�>�i 8_b82 �WP����� �� {'n���8�z;�Ƥy��s� ��@���P��o|�S�ih $3��@߹j��    IEND�B`�
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\globals.css =====
+/*
+  Artık v4'te üç @tailwind direktifi yerine
+  tek bir import kullanıyoruz. Tailwind bunu
+  otomatik olarak doğru katmanlara ayıracaktır.
+*/
+@import "tailwindcss";
+
+/* Temel font ve smooth görünüm */
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+/* Scrollbar sade */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+
+/* --- FullCalendar Koyu Tema Ayarlamaları --- */
+
+/* Genel Butonlar ve Başlık */
+.fc .fc-button-primary {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+.fc .fc-button-primary:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+.fc .fc-toolbar-title {
+  color: #fff;
+  font-size: 1.5em !important;
+}
+
+/* Takvim Arka Planı ve Çizgileri */
+.fc .fc-daygrid-day {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.fc .fc-day-today {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Gün Başlıkları (Pzt, Salı...) */
+.fc .fc-col-header-cell {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+}
+
+/* Event (Etkinlik) Stilleri */
+/* Varsayılan event arka planını ve çerçevesini kaldır */
+.fc-daygrid-day-event {
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer;
+  padding: 1px 4px !important;
+  margin-top: 2px !important;
+}
+
+/* Özel render ettiğimiz metnin stili */
+.fc-event-title-custom, .fc-event-title {
+  color: #e5e7eb !important; /* gray-200 */
+  font-weight: 500 !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-daygrid-day-event:hover .fc-event-title-custom, .fc-daygrid-day-event:hover .fc-event-title {
+  color: #fff !important;
+  text-decoration: underline;
+}
+
+/* Resmi tatil gibi arka planı olmayan, blok eventler */
+.fc-event.fc-event-start.fc-event-end {
+  padding: 2px 4px !important;
+  border-radius: 4px;
+}
+
+/* Arka plan etkinliği için fare olaylarını devre dışı bırakma */
+.fc-bg-event {
+    pointer-events: none;
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\layout.tsx =====
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+// Yeni eklenenler
+import { Toaster } from "react-hot-toast";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "İK Yönetim Sistemi",
+  description: "Modern İK Yönetim Portalı",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="tr">
+      <body className={inter.className}>
+        {/* Toaster component'ini ve özelleştirmelerini buraya ekliyoruz */}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              // Glassmorphism efekti için stil ayarları
+              background: 'rgba(255, 255, 255, 0.15)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#ffffff',
+              padding: '12px',
+              borderRadius: '16px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            },
+            success: {
+              iconTheme: {
+                primary: '#22c55e', // green-500
+                secondary: '#ffffff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444', // red-500
+                secondary: '#ffffff',
+              },
+            },
+          }}
+        />
+        {children}
+      </body>
+    </html>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\page.tsx =====
+"use client";
+
+import { useState, useRef, useActionState } from "react";
+import { useFormStatus } from "react-dom";
+import GlassCard from "@/components/GlassCard";
+import { createLeaveRequest, login, type LoginState } from "./actions";
+import toast from "react-hot-toast";
+
+function LoginSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button 
+      type="submit" 
+      disabled={pending} 
+      className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:bg-green-800 disabled:cursor-not-allowed"
+    >
+      {pending ? "Giriş Yapılıyor..." : "Giriş Yap"}
+    </button>
+  );
+}
+
+export default function LoginPage() {
+  const [activeTab, setActiveTab] = useState<"personel" | "yetkili">("personel");
+  const [personnelFormKey, setPersonnelFormKey] = useState(0);
+  const [tc, setTc] = useState("");
+  const [personnelEmail, setPersonnelEmail] = useState("");
+
+  const initialState: LoginState = { message: null };
+  const [loginState, loginFormAction] = useActionState(login, initialState);
+
+  const handleLeaveRequestSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const result = await createLeaveRequest(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      setPersonnelFormKey(prevKey => prevKey + 1);
+      setTc("");
+      setPersonnelEmail("");
+    } else {
+      toast.error(result.message);
+    }
+  };
+  
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-cover bg-center" style={{ backgroundImage: "url('/wallpaper1.png')" }}>
+      <main className="w-full max-w-md">
+        {/* GÜNCELLENDİ: GlassCard stilleri isteğiniz doğrultusunda değiştirildi. */}
+        <GlassCard 
+          tintValue={15} 
+          blurPx={50} 
+          borderRadiusPx={24} 
+          grainOpacity={0}
+        >
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white">İK Yönetim Portalı</h1>
+            <p className="text-gray-300 mt-2">İzin süreçlerinizi kolayca yönetin.</p>
+          </div>
+          <div className="flex bg-white/10 rounded-lg p-1 mb-6">
+            <button 
+              onClick={() => setActiveTab("personel")} 
+              className={`w-full p-2 rounded-md text-sm font-medium transition-colors ${activeTab === "personel" ? "bg-white/20 text-white" : "text-gray-300 hover:bg-white/5"}`}
+            >
+              Personel İzin Talebi
+            </button>
+            <button 
+              onClick={() => setActiveTab("yetkili")} 
+              className={`w-full p-2 rounded-md text-sm font-medium transition-colors ${activeTab === "yetkili" ? "bg-white/20 text-white" : "text-gray-300 hover:bg-white/5"}`}
+            >
+              Yetkili Girişi
+            </button>
+          </div>
+          {activeTab === "personel" ? (
+            <form key={personnelFormKey} onSubmit={handleLeaveRequestSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="tc" className="block text-sm font-medium text-gray-200 mb-1">T.C. Kimlik Numarası</label>
+                <input type="text" id="tc" name="tc" maxLength={11} required value={tc} onChange={(e) => setTc(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="11 haneli T.C. kimlik numaranız" />
+              </div>
+              <div>
+                <label htmlFor="email_personel" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
+                <input type="email" id="email_personel" name="email_personel" required value={personnelEmail} onChange={(e) => setPersonnelEmail(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="sistemde kayıtlı e-postanız" />
+              </div>
+              <div>
+                <label htmlFor="leave_type" className="block text-sm font-medium text-gray-200 mb-1">İzin Türü</label>
+                <select name="leave_type" id="leave_type" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                  <option value="">Seçiniz...</option>
+                  <option value="yıllık izin">Yıllık İzin</option>
+                  <option value="ücretli izin">Ücretli İzin (Mazeret)</option>
+                  <option value="ücretsiz izin">Ücretsiz İzin</option>
+                  <option value="raporlu">Raporlu (İstirahat)</option>
+                </select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="w-full sm:w-1-2">
+                  <label htmlFor="start_date" className="block text-sm font-medium text-gray-200 mb-1">Başlangıç Tarihi</label>
+                  <input name="start_date" id="start_date" type="date" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none [color-scheme:dark]" />
+                </div>
+                <div className="w-full sm:w-1/2">
+                  <label htmlFor="end_date" className="block text-sm font-medium text-gray-200 mb-1">Bitiş Tarihi</label>
+                  <input name="end_date" id="end_date" type="date" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none [color-scheme:dark]" />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">
+                İzin Talebi Oluştur
+              </button>
+            </form>
+          ) : (
+             <form action={loginFormAction} className="space-y-4">
+                <div>
+                  <label htmlFor="email_yetkili" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
+                  <input type="email" id="email_yetkili" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="ornek@sirket.com" />
+                </div>
+                <div>
+                  <label htmlFor="password"  className="block text-sm font-medium text-gray-200 mb-1">Şifre</label>
+                  <input type="password" id="password" name="password" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
+                </div>
+                {loginState?.message && <p className="text-sm text-red-400 text-center">{loginState.message}</p>}
+                <LoginSubmitButton />
+             </form>
+          )}
+        </GlassCard>
+      </main>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\layout.tsx =====
+"use client";
+
+import { useState } from 'react';
+import Sidebar from '@/components/Sidebar';
+import SettingsModal from '@/components/SettingsModal'; // GÜNCELLENDİ: Modal buraya import edildi
+import { Menu } from 'lucide-react';
+import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
+import { useRouter } from 'next/navigation'; // GÜNCELLENDİ: Yönlendirme için import edildi
+
+function DashboardContainer({ children }: { children: React.ReactNode }) {
+  // GÜNCELLENDİ: Ayarlar modalı ve logout için gerekli her şey context'ten ve hook'lardan alınıyor
+  const { 
+    supabase, 
+    bg, 
+    // Ayarlar modalına props olarak vermek için tüm state'ler ve setter'lar
+    tintValue, setTintValue, 
+    grainOpacity, setGrainOpacity, 
+    blurPx, setBlurPx, 
+    borderRadiusPx, setBorderRadiusPx, 
+    setBg 
+  } = useSettings();
+  
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false); // Ayarlar modalının state'i buraya taşındı
+  const router = useRouter();
+
+  // Çıkış yapma fonksiyonu buraya taşındı
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  return (
+    <div 
+      className="relative min-h-screen w-full bg-cover bg-center transition-all duration-500"
+      style={{ backgroundImage: `url(${bg})` }}
+    >
+      <Sidebar 
+        mobileOpen={mobileOpen} 
+        setMobileOpen={setMobileOpen} 
+        isCollapsed={isCollapsed}
+        setIsCollapsed={setIsCollapsed}
+      />
+      <div className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
+        <header className="md:hidden sticky top-0 bg-gray-900/50 backdrop-blur-md p-4 border-b border-white/10 z-20 flex items-center gap-4">
+            <button onClick={() => setMobileOpen(true)}>
+                <Menu className="text-white"/>
+            </button>
+            <h1 className="text-lg font-semibold text-white">İK Portalı</h1>
+        </header>
+        <main>
+          {children}
+        </main>
+      </div>
+
+      {/* GÜNCELLENDİ: Butonlar ve Modal JSX'i layout'a taşındı */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
+        <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border border-white/20 shadow-md transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
+        <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-md hover:bg-white/20 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+      </div>
+
+      {settingsOpen && (
+        <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          bg={bg} setBg={setBg}
+          tintValue={tintValue} setTintValue={setTintValue}
+          grainOpacity={grainOpacity} setGrainOpacity={setGrainOpacity}
+          blurPx={blurPx} setBlurPx={setBlurPx}
+          borderRadiusPx={borderRadiusPx} setBorderRadiusPx={setBorderRadiusPx}
+        />
+      )}
+    </div>
+  );
+}
+
+// Ana Layout, sadece Provider'ı sağlar
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SettingsProvider>
+      <DashboardContainer>{children}</DashboardContainer>
+    </SettingsProvider>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\page.tsx =====
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import GlassCard from "@/components/GlassCard";
+import { useSettings } from "@/contexts/SettingsContext"; 
+import type { User } from '@supabase/supabase-js';
+
+export default function DashboardPage() {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  
+  // GÜNCELLENDİ: Sadece bu sayfaya özel state'ler kaldı
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  const [pendingCount, setPendingCount] = useState<number | string>('...');
+  const [approvedThisMonthCount, setApprovedThisMonthCount] = useState<number | string>('...');
+  const [personnelCount, setPersonnelCount] = useState<number | string>('...');
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+        const [pendingResult, approvedResult, personnelResult] = await Promise.all([
+          supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+          supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'approved').gte('start_date', firstDayOfMonth).lte('start_date', lastDayOfMonth),
+          supabase.from('personnel').select('*', { count: 'exact', head: true })
+        ]);
+
+        if(pendingResult.error) throw pendingResult.error;
+        setPendingCount(pendingResult.count ?? 0);
+
+        if(approvedResult.error) throw approvedResult.error;
+        setApprovedThisMonthCount(approvedResult.count ?? 0);
+
+        if(personnelResult.error) throw personnelResult.error;
+        setPersonnelCount(personnelResult.count ?? 0);
+
+      } catch (error) {
+        console.error("Dashboard verileri çekilirken hata oluştu:", error);
+        setPendingCount('Hata');
+        setApprovedThisMonthCount('Hata');
+        setPersonnelCount('Hata');
+      }
+    };
+
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        await fetchDashboardData();
+      } else {
+        router.push('/');
+      }
+      setLoading(false);
+    };
+
+    checkUser();
+  }, [router, supabase]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Yükleniyor...</div>
+    );
+  }
+
+  return (
+    <div className="w-full min-h-screen flex items-center justify-center p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
+        <GlassCard tintValue={tintValue} blurPx={blurPx} borderRadiusPx={borderRadiusPx} grainOpacity={grainOpacity}>
+          <h2 className="text-lg font-semibold mb-2">Bekleyen İzinler</h2>
+          <p className="text-3xl font-bold">{pendingCount}</p>
+        </GlassCard>
+        <GlassCard tintValue={tintValue} blurPx={blurPx} borderRadiusPx={borderRadiusPx} grainOpacity={grainOpacity}>
+          <h2 className="text-lg font-semibold mb-2">Onaylanan İzinler (Bu Ay)</h2>
+          <p className="text-3xl font-bold">{approvedThisMonthCount}</p>
+        </GlassCard>
+        <GlassCard tintValue={tintValue} blurPx={blurPx} borderRadiusPx={borderRadiusPx} grainOpacity={grainOpacity}>
+          <h2 className="text-lg font-semibold mb-2">Toplam Personel</h2>
+          <p className="text-3xl font-bold">{personnelCount}</p>
+        </GlassCard>
+      </div>
+
+      {/* GÜNCELLENDİ: Butonlar ve Modal buradan kaldırıldı. */}
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\calendar\page.tsx =====
+"use client";
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import trLocale from '@fullcalendar/core/locales/tr';
+import toast from 'react-hot-toast';
+import RequestDetailsModal from '@/components/RequestDetailsModal';
+import type { LeaveRequest } from '../requests/page';
+import { User as UserIcon } from 'lucide-react'; // İkon için
+
+type CalendarEvent = {
+  title: string;
+  start: string;
+  end?: string;
+  display?: string; // 'background' veya 'block'
+  backgroundColor: string;
+  borderColor: string;
+  textColor?: string;
+  allDay: boolean;
+  extendedProps: {
+    isHoliday?: boolean;
+    originalRequest?: LeaveRequest;
+  }
+};
+
+type Personnel = {
+  id: number;
+  full_name: string;
+};
+
+export default function CalendarPage() {
+  const { supabase } = useSettings();
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  
+  // Filtreler için yeni state'ler
+  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
+  const [selectedPersonnelId, setSelectedPersonnelId] = useState<string>('');
+
+  // Sayfa yüklendiğinde personel listesini çek
+  useEffect(() => {
+    const fetchPersonnel = async () => {
+      const { data, error } = await supabase
+        .from('personnel')
+        .select('id, full_name')
+        .order('full_name');
+      if (data) setPersonnelList(data);
+    };
+    fetchPersonnel();
+  }, [supabase]);
+
+  const fetchCalendarData = useCallback(async (personnelId: string) => {
+    setLoading(true);
+
+    const [requestsRes, holidaysRes] = await Promise.all([
+      supabase.rpc('search_leave_requests', {
+        personnel_filter_id: personnelId ? Number(personnelId) : null,
+        region_filter_id: null,
+        search_query: null
+      }),
+      supabase.from('official_holidays').select('name, date')
+    ]);
+
+    if (requestsRes.error || holidaysRes.error) {
+      console.error("Takvim verileri çekilirken hata:", requestsRes.error || holidaysRes.error);
+      toast.error("Takvim verileri yüklenemedi.");
+      setLoading(false);
+      return;
+    }
+    
+    // Eğer bir personel seçiliyse, izinleri kırmızı arka plan olarak göster
+    if (personnelId) {
+      const leaveEvents: CalendarEvent[] = (requestsRes.data as LeaveRequest[]).map(req => ({
+        title: req.personnel_full_name,
+        start: req.start_date,
+        end: new Date(new Date(req.end_date).setDate(new Date(req.end_date).getDate() + 1)).toISOString().split('T')[0],
+        display: 'background', // ÖNEMLİ: Günü boyamak için
+        backgroundColor: 'rgba(239, 68, 68, 0.4)', // Kırmızı tonlu, yarı saydam
+        borderColor: 'transparent',
+        allDay: true,
+        extendedProps: {
+          originalRequest: req,
+        }
+      }));
+       setEvents(leaveEvents);
+    } else {
+        // Personel seçili değilse, normal metin olarak göster
+        const leaveEvents: CalendarEvent[] = (requestsRes.data as LeaveRequest[]).map(req => ({
+            title: req.personnel_full_name || 'Bilinmeyen',
+            start: req.start_date,
+            end: new Date(new Date(req.end_date).setDate(new Date(req.end_date).getDate() + 1)).toISOString().split('T')[0],
+            backgroundColor: 'transparent',
+            borderColor: 'transparent',
+            textColor: '#cbd5e1', // AÇIK Gri metin rengi
+            allDay: true,
+            extendedProps: {
+              originalRequest: req,
+            }
+        }));
+        
+        const holidayEvents: CalendarEvent[] = holidaysRes.data.map(holiday => ({
+          title: holiday.name,
+          start: holiday.date,
+          allDay: true,
+          backgroundColor: '#6366f1', // Resmi tatiller için belirgin renk
+          borderColor: '#6366f1',
+          extendedProps: { isHoliday: true }
+        }));
+        setEvents([...leaveEvents, ...holidayEvents]);
+    }
+
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchCalendarData(selectedPersonnelId);
+  }, [selectedPersonnelId, fetchCalendarData]);
+
+  const handleEventClick = (clickInfo: any) => {
+    if (clickInfo.event.extendedProps.originalRequest) {
+      setSelectedRequest(clickInfo.event.extendedProps.originalRequest);
+    }
+  };
+  
+  const handleModalClose = () => {
+    setSelectedRequest(null);
+    fetchCalendarData(selectedPersonnelId);
+  };
+  
+  // İzin metninin özel render edilmesi için fonksiyon
+  const renderEventContent = (eventInfo: any) => {
+    return (
+      <div className='w-full overflow-hidden whitespace-nowrap text-ellipsis'>
+        <UserIcon size={12} className="inline-block mr-1" />
+        {eventInfo.event.title}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="p-4 md:p-8 text-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h1 className="text-3xl font-bold">Genel Takvim</h1>
+            <div className='w-full md:w-auto'>
+              <select
+                value={selectedPersonnelId}
+                onChange={(e) => setSelectedPersonnelId(e.target.value)}
+                className="w-full md:w-72 bg-black/20 py-2 px-4 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              >
+                <option value="">Tüm Personelleri Göster</option>
+                {personnelList.map(person => (
+                  <option key={person.id} value={person.id}>{person.full_name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="p-4 bg-gray-800/50 backdrop-blur-md border border-white/10 rounded-xl">
+            {loading ? (
+              <div className="text-center py-20">Takvim yükleniyor...</div>
+            ) : (
+              <FullCalendar
+                plugins={[dayGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,dayGridWeek'
+                }}
+                events={events}
+                locale={trLocale}
+                firstDay={1}
+                height="auto"
+                eventClick={handleEventClick}
+                dayMaxEvents={2}
+                eventContent={selectedPersonnelId ? undefined : renderEventContent} // Sadece tümü seçiliyken özel render yap
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {selectedRequest && (
+        <RequestDetailsModal 
+          request={selectedRequest} 
+          onClose={handleModalClose} 
+        />
+      )}
+    </>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\personnel\page.tsx =====
+"use client";
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { Plus, MoreHorizontal, Edit, Trash2, CalendarPlus } from 'lucide-react';
+import GlassCard from '@/components/GlassCard';
+import AddPersonnelModal from '@/components/AddPersonnelModal';
+import EditPersonnelModal from '@/components/EditPersonnelModal';
+import ConfirmModal from '@/components/ConfirmModal';
+import CreateLeaveModal from '@/components/CreateLeaveModal';
+import Pagination from '@/components/Pagination';
+import { deletePersonnel } from '@/app/actions';
+import toast from 'react-hot-toast';
+
+export type Personnel = {
+  id: number;
+  full_name: string;
+  email: string;
+  tc_kimlik_no: string;
+  start_date: string;
+  region_id?: number;
+  annual_leave_days_entitled: number;
+  annual_leave_days_used: number;
+};
+
+const PAGE_SIZE = 10;
+
+export default function PersonnelPage() {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalPersonnel, setTotalPersonnel] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [personnelToDelete, setPersonnelToDelete] = useState<Personnel | null>(null);
+  const [personnelToEdit, setPersonnelToEdit] = useState<Personnel | null>(null);
+  const [personnelForLeave, setPersonnelForLeave] = useState<Personnel | null>(null);
+
+  const fetchPersonnel = useCallback(async (page: number) => {
+    setLoading(true);
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error, count } = await supabase
+      .from('personnel')
+      .select('*', { count: 'exact' })
+      .order('full_name', { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      console.error("Personel listesi çekilirken hata:", error);
+      toast.error("Personel listesi yüklenemedi.");
+    } else {
+      setPersonnelList(data as Personnel[]);
+      setTotalPersonnel(count || 0);
+    }
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchPersonnel(currentPage);
+  }, [fetchPersonnel, currentPage]);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+    };
+    if (openMenuId !== null) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  const refreshList = () => {
+    if (personnelList.length === 1 && currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    } else {
+      fetchPersonnel(currentPage);
+    }
+  };
+  
+  const handleConfirmDelete = async () => {
+    if (!personnelToDelete) return;
+    const toastId = toast.loading('Personel siliniyor...');
+    const result = await deletePersonnel(personnelToDelete.id);
+    if (result.success) {
+      toast.success(result.message, { id: toastId });
+      refreshList();
+    } else {
+      toast.error(result.message, { id: toastId });
+    }
+    setPersonnelToDelete(null);
+  };
+  
+  const handleDeleteClick = (person: Personnel) => {
+    setPersonnelToDelete(person);
+    setOpenMenuId(null);
+  };
+
+  const handleEditClick = (person: Personnel) => {
+    setPersonnelToEdit(person);
+    setOpenMenuId(null);
+  };
+
+  const handleCreateLeaveClick = (person: Personnel) => {
+    setPersonnelForLeave(person);
+    setOpenMenuId(null);
+  };
+
+  return (
+    <>
+      <div className="p-4 md:p-8 text-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Personel Listesi</h1>
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={16} />
+              <span>Yeni Personel Ekle</span>
+            </button>
+          </div>
+          
+          {loading ? (
+            <div className="text-center py-10">Personel listesi yükleniyor...</div>
+          ) : (
+            <GlassCard
+              tintValue={tintValue}
+              blurPx={blurPx}
+              borderRadiusPx={borderRadiusPx}
+              grainOpacity={grainOpacity}
+              className="!p-0 overflow-hidden" 
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="border-b border-white/10 text-sm text-gray-400">
+                    <tr>
+                      <th className="p-4">Ad Soyad</th>
+                      <th className="p-4 hidden md:table-cell">E-posta</th>
+                      <th className="p-4 hidden lg:table-cell">Yıllık İzin Durumu (Kalan/Hak)</th>
+                      <th className="p-4 text-right">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {personnelList.length > 0 ? (
+                      personnelList.map((person) => {
+                       const remainingDays = person.annual_leave_days_entitled - person.annual_leave_days_used;
+                       return (
+                        <tr key={person.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="p-4 font-semibold">{person.full_name}</td>
+                          <td className="p-4 hidden md:table-cell">{person.email}</td>
+                          <td className="p-4 hidden lg:table-cell">
+                             <span className={`font-bold ${remainingDays > 5 ? 'text-green-400' : 'text-yellow-400'}`}>
+                                {remainingDays}
+                             </span>
+                             <span className="text-gray-400"> / {person.annual_leave_days_entitled} gün</span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="hidden md:flex items-center justify-end gap-2">
+                              <button onClick={() => handleCreateLeaveClick(person)} className="p-2 rounded-md hover:bg-white/10 transition-colors" title="İzin Oluştur">
+                                <CalendarPlus size={16} />
+                              </button>
+                              <button onClick={() => handleEditClick(person)} className="p-2 rounded-md hover:bg-white/10 transition-colors" title="Düzenle">
+                                <Edit size={16} />
+                              </button>
+                              <button onClick={() => handleDeleteClick(person)} className="p-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors" title="Sil">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                            <div className="md:hidden relative">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(openMenuId === person.id ? null : person.id);
+                                }}
+                                className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                              >
+                                <MoreHorizontal size={20} />
+                              </button>
+                              {openMenuId === person.id && (
+                                <GlassCard
+                                  tintValue={tintValue}
+                                  blurPx={blurPx}
+                                  borderRadiusPx={8}
+                                  grainOpacity={grainOpacity}
+                                  className="!p-2 w-48 absolute top-full right-0 mt-2 z-20 animate-in fade-in zoom-in-95"
+                                >
+                                  <ul>
+                                    <li>
+                                      <button onClick={() => handleCreateLeaveClick(person)} className="w-full text-left flex items-center gap-3 p-2 hover:bg-white/10 rounded-md transition-colors">
+                                        <CalendarPlus size={16} />
+                                        <span>İzin Oluştur</span>
+                                      </button>
+                                    </li>
+                                    <li>
+                                      <button onClick={() => handleEditClick(person)} className="w-full text-left flex items-center gap-3 p-2 hover:bg-white/10 rounded-md transition-colors">
+                                        <Edit size={16} />
+                                        <span>Düzenle</span>
+                                      </button>
+                                    </li>
+                                    <li>
+                                      <button onClick={() => handleDeleteClick(person)} className="w-full text-left flex items-center gap-3 p-2 text-red-400 hover:bg-red-500/10 rounded-md transition-colors">
+                                        <Trash2 size={16} />
+                                        <span>Sil</span>
+                                      </button>
+                                    </li>
+                                  </ul>
+                                </GlassCard>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                       );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center p-8 text-gray-400">
+                          Sistemde kayıtlı personel bulunamadı.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalCount={totalPersonnel}
+                pageSize={PAGE_SIZE}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </GlassCard>
+          )}
+        </div>
+      </div>
+      
+      {isAddModalOpen && (
+        <AddPersonnelModal 
+          onClose={() => setIsAddModalOpen(false)}
+          onPersonnelAdded={() => fetchPersonnel(1)}
+        />
+      )}
+      {personnelToEdit && (
+        <EditPersonnelModal
+          personnelToEdit={personnelToEdit}
+          onClose={() => setPersonnelToEdit(null)}
+          onPersonnelUpdated={refreshList}
+        />
+      )}
+      <ConfirmModal
+        isOpen={!!personnelToDelete}
+        onClose={() => setPersonnelToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Personeli Sil"
+        message={`'${personnelToDelete?.full_name}' adlı personeli kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
+      />
+      {personnelForLeave && (
+        <CreateLeaveModal
+          personnel={personnelForLeave}
+          onClose={() => setPersonnelForLeave(null)}
+        />
+      )}
+    </>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\regions\page.tsx =====
+"use client";
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { Plus, Edit, Trash2 } from 'lucide-react';
+import GlassCard from '@/components/GlassCard';
+import AddRegionModal from '@/components/AddRegionModal';
+import EditRegionModal from '@/components/EditRegionModal';
+import ConfirmModal from '@/components/ConfirmModal';
+import { deleteRegion } from '@/app/actions';
+import toast from 'react-hot-toast';
+
+type Region = { id: number; name: string; };
+
+export default function RegionsPage() {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [regionToEdit, setRegionToEdit] = useState<Region | null>(null);
+  const [regionToDelete, setRegionToDelete] = useState<Region | null>(null);
+
+  const fetchRegions = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('regions').select('*').order('name');
+    if (error) toast.error('Bölgeler yüklenemedi.');
+    else setRegions(data);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { fetchRegions() }, [fetchRegions]);
+
+  const handleConfirmDelete = async () => {
+    if (!regionToDelete) return;
+    const toastId = toast.loading('Bölge siliniyor...');
+    const result = await deleteRegion(regionToDelete.id);
+    if (result.success) {
+      toast.success(result.message, { id: toastId });
+      fetchRegions();
+    } else {
+      toast.error(result.message, { id: toastId });
+    }
+    setRegionToDelete(null);
+  };
+
+  return (
+    <>
+      <div className="p-4 md:p-8 text-white">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Bölge Yönetimi</h1>
+            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700">
+              <Plus size={16} />
+              <span>Yeni Bölge Ekle</span>
+            </button>
+          </div>
+          
+          <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}}>
+            {loading ? <div className="text-center p-4">Yükleniyor...</div> : (
+              <ul className="space-y-2">
+                {regions.map(region => (
+                  <li key={region.id} className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                    <span className="font-semibold">{region.name}</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setRegionToEdit(region)} className="p-2 hover:bg-white/10 rounded-md"><Edit size={16} /></button>
+                      <button onClick={() => setRegionToDelete(region)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-md"><Trash2 size={16} /></button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </GlassCard>
+        </div>
+      </div>
+      
+      {isAddModalOpen && <AddRegionModal onClose={() => setIsAddModalOpen(false)} onRegionAdded={fetchRegions} />}
+      {regionToEdit && <EditRegionModal region={regionToEdit} onClose={() => setRegionToEdit(null)} onRegionUpdated={fetchRegions} />}
+      <ConfirmModal
+        isOpen={!!regionToDelete}
+        onClose={() => setRegionToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Bölgeyi Sil"
+        message={`'${regionToDelete?.name}' adlı bölgeyi silmek istediğinizden emin misiniz?`}
+      />
+    </>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\requests\page.tsx =====
+"use client";
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { MoreHorizontal, Filter, X, Search } from 'lucide-react';
+import GlassCard from '@/components/GlassCard';
+import RequestDetailsModal from '@/components/RequestDetailsModal';
+import Pagination from '@/components/Pagination';
+import toast from 'react-hot-toast';
+
+export type LeaveRequestStatus = 'pending' | 'approved_by_coordinator' | 'rejected_by_coordinator' | 'approved' | 'rejected';
+
+export type LeaveRequest = {
+  id: number;
+  start_date: string;
+  end_date: string;
+  status: LeaveRequestStatus;
+  created_at: string;
+  history_log: any[];
+  leave_type: string;
+  personnel_full_name: string; 
+};
+
+type Region = { id: number; name: string; };
+
+const PAGE_SIZE = 10;
+
+const statusColors: { [key in LeaveRequestStatus]: string } = {
+  pending: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  approved_by_coordinator: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+  rejected_by_coordinator: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  approved: 'bg-green-500/20 text-green-300 border-green-500/30',
+  rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
+};
+const statusTranslations: { [key in LeaveRequestStatus]: string } = {
+  pending: 'Beklemede',
+  approved_by_coordinator: 'Koordinatör Onayladı',
+  rejected_by_coordinator: 'Koordinatör Reddetti',
+  approved: 'Onaylandı',
+  rejected: 'Reddedildi',
+};
+
+export default function LeaveRequestsPage() {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const fetchRegions = async () => {
+      const { data, error } = await supabase.from('regions').select('id, name');
+      if (error) toast.error("Bölgeler yüklenemedi.");
+      else setRegions(data);
+    };
+    fetchRegions();
+  }, [supabase]);
+
+  const fetchLeaveRequests = useCallback(async (page: number, regionId: string, search: string) => {
+    setLoading(true);
+    
+    const { data, error } = await supabase.rpc('search_leave_requests', {
+        region_filter_id: regionId ? Number(regionId) : null,
+        search_query: search || null
+    });
+
+    if (error) {
+      console.error("İzin talepleri çekilirken RPC hatası:", error);
+      toast.error("İzin talepleri yüklenemedi.");
+      setRequests([]);
+      setTotalRequests(0);
+    } else {
+      setRequests(data as LeaveRequest[]);
+      setTotalRequests(data.length);
+    }
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchLeaveRequests(1, selectedRegion, searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [selectedRegion, searchQuery, fetchLeaveRequests]);
+
+  useEffect(() => {
+    fetchLeaveRequests(currentPage, selectedRegion, searchQuery);
+  }, [currentPage, fetchLeaveRequests]);
+  
+  const handleModalClose = () => {
+    setSelectedRequest(null);
+    fetchLeaveRequests(currentPage, selectedRegion, searchQuery); 
+  }
+
+  const clearFilters = () => {
+    setSelectedRegion('');
+    setSearchQuery('');
+  };
+
+  const paginatedRequests = requests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  return (
+    <>
+      <div className="p-4 md:p-8 text-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">İzin Talepleri</h1>
+          </div>
+          
+          <GlassCard
+            tintValue={tintValue}
+            blurPx={blurPx}
+            borderRadiusPx={borderRadiusPx}
+            grainOpacity={grainOpacity}
+            className="mb-6 !p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                <Filter size={20} />
+                <h3>Filtreler</h3>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                <div className="relative w-full sm:w-auto">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Personel ara..."
+                    className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10"
+                  />
+                </div>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                  className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10"
+                >
+                  <option value="">Tüm Bölgeler</option>
+                  {regions.map(region => (
+                    <option key={region.id} value={region.id}>{region.name}</option>
+                  ))}
+                </select>
+                {(selectedRegion || searchQuery) && (
+                  <button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
+                    <X size={16}/> Temizle
+                  </button>
+                )}
+              </div>
+            </div>
+          </GlassCard>
+
+          {loading ? (
+            <div className="text-center py-10">Yükleniyor...</div>
+          ) : (
+            <GlassCard
+              tintValue={tintValue}
+              blurPx={blurPx}
+              borderRadiusPx={borderRadiusPx}
+              grainOpacity={grainOpacity}
+              className="!p-0 overflow-hidden" 
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="border-b border-white/10 text-sm text-gray-400">
+                    <tr>
+                      <th className="p-4">Personel</th>
+                      <th className="p-4 hidden md:table-cell">Başlangıç Tarihi</th>
+                      <th className="p-4 hidden md:table-cell">Bitiş Tarihi</th>
+                      <th className="p-4">Durum</th>
+                      <th className="p-4 text-right">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedRequests.length > 0 ? (
+                      paginatedRequests.map((request) => (
+                        <tr key={request.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="p-4 font-semibold">
+                            {request.personnel_full_name || 'Bilinmeyen Personel'}
+                          </td>
+                          <td className="p-4 hidden md:table-cell">{new Date(request.start_date).toLocaleDateString('tr-TR')}</td>
+                          <td className="p-4 hidden md:table-cell">{new Date(request.end_date).toLocaleDateString('tr-TR')}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${statusColors[request.status]}`}>
+                              {statusTranslations[request.status]}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button 
+                              onClick={() => setSelectedRequest(request)} 
+                              className="p-2 rounded-full hover:bg-white/10"
+                            >
+                              <MoreHorizontal size={20} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center p-8 text-gray-400">
+                          Filtrelerle eşleşen izin talebi bulunamadı.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalCount={totalRequests}
+                pageSize={PAGE_SIZE}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </GlassCard>
+          )}
+        </div>
+      </div>
+      
+      {selectedRequest && (
+        <RequestDetailsModal 
+          request={selectedRequest} 
+          onClose={handleModalClose} 
+        />
+      )}
+    </>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\settings\page.tsx =====
+"use client";
+
+import { useEffect, useState, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { updateSystemSettings } from '@/app/actions';
+import GlassCard from '@/components/GlassCard';
+import toast from 'react-hot-toast';
+
+type SystemSettings = {
+    default_annual_leave_days: string;
+    weekend_configuration: 'sunday_only' | 'saturday_sunday';
+};
+
+export default function AdminSettingsPage() {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data, error } = await supabase.from('system_settings').select('key, value');
+      if (data) {
+        const settingsObject = data.reduce((acc, { key, value }) => {
+          acc[key] = value;
+          return acc;
+        }, {} as any);
+        setSettings(settingsObject);
+      }
+      setLoading(false);
+    };
+    fetchSettings();
+  }, [supabase]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await updateSystemSettings(formData);
+    if (result.success) {
+      toast.success(result.message);
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  if (loading) return <div className="p-8 text-white">Ayarlar yükleniyor...</div>;
+
+  return (
+    <div className="p-4 md:p-8">
+      <div className="max-w-4xl mx-auto text-white">
+        <h1 className="text-3xl font-bold mb-6">Sistem Ayarları</h1>
+        <form onSubmit={handleSubmit}>
+          <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}}>
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="leaveDays" className="block text-lg font-semibold mb-2">Varsayılan Yıllık İzin Hakkı</label>
+                <p className="text-sm text-gray-400 mb-2">Yeni eklenen her personele otomatik olarak atanacak olan yıllık izin günü sayısı.</p>
+                <input
+                  id="leaveDays"
+                  name="default_annual_leave_days"
+                  type="number"
+                  defaultValue={settings?.default_annual_leave_days}
+                  required
+                  className="w-full md:w-1/3 bg-black/20 p-3 rounded-lg border border-white/10"
+                />
+              </div>
+              
+              {/* YENİ: Hafta Sonu Ayarı */}
+              <div>
+                <label className="block text-lg font-semibold mb-2">Hafta Sonu Tatili</label>
+                <p className="text-sm text-gray-400 mb-2">Puantaj ve iş günü hesaplamalarında hangi günlerin hafta sonu olarak sayılacağını seçin.</p>
+                <div className="flex gap-6">
+                    <label className="flex items-center gap-2">
+                        <input type="radio" name="weekend_configuration" value="saturday_sunday" defaultChecked={settings?.weekend_configuration === 'saturday_sunday'} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"/>
+                        <span>Cumartesi ve Pazar</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                        <input type="radio" name="weekend_configuration" value="sunday_only" defaultChecked={settings?.weekend_configuration === 'sunday_only'} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"/>
+                        <span>Sadece Pazar</span>
+                    </label>
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+          
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 font-semibold">
+              {isSubmitting ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\app\dashboard\timesheet\page.tsx =====
+"use client";
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { ChevronLeft, ChevronRight, Filter, Search, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from '@/components/GlassCard';
+
+// Durumlar için renk ve kısaltma haritası
+const statusStyles = {
+    'Çalıştı': { abbr: 'Ç', className: 'bg-green-500/20 text-green-300' },
+    'Yıllık İzin': { abbr: 'Yİ', className: 'bg-blue-500/20 text-blue-300' },
+    'Ücretli İzin': { abbr: 'Üİ', className: 'bg-cyan-500/20 text-cyan-300' },
+    'Ücretsiz İzin': { abbr: 'ÜI', className: 'bg-gray-500/20 text-gray-300' },
+    'Raporlu': { abbr: 'R', className: 'bg-orange-500/20 text-orange-300' },
+    'Resmi Tatil': { abbr: 'RT', className: 'bg-indigo-500/20 text-indigo-300' },
+    'Hafta Sonu': { abbr: 'H', className: 'bg-gray-700/20 text-gray-500' },
+};
+
+type TimesheetData = {
+    personnel_id: number;
+    full_name: string;
+    statuses: { [month: number]: { [day: number]: keyof typeof statusStyles } };
+};
+
+type Region = { id: number; name: string; };
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+
+export default function TimesheetPage() {
+    const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity, profile, weekendConfiguration } = useSettings();
+    const [timesheetData, setTimesheetData] = useState<TimesheetData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [showWholeYear, setShowWholeYear] = useState(false);
+    const [regions, setRegions] = useState<Region[]>([]);
+    const [selectedRegion, setSelectedRegion] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState<string>('');
+
+    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+    const months = Array.from({ length: 12 }, (_, i) => i);
+    const monthDays = Array.from({ length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth()) }, (_, i) => i + 1);
+
+    useEffect(() => {
+        const fetchRegions = async () => {
+            const { data, error } = await supabase.from('regions').select('id, name');
+            if (error) toast.error("Bölgeler yüklenemedi.");
+            else setRegions(data);
+        };
+        fetchRegions();
+    }, [supabase]);
+
+    const fetchTimesheet = useCallback(async (date: Date, regionId: string, search: string, isYearlyView: boolean) => {
+        setLoading(true);
+        try {
+            if (!profile) { setLoading(false); return; }
+
+            let personnelQuery = supabase.from('personnel').select('id, full_name');
+            if (profile.role === 'coordinator') personnelQuery = personnelQuery.eq('region_id', profile.region_id);
+            if (regionId) personnelQuery = personnelQuery.eq('region_id', Number(regionId));
+            if (search) personnelQuery = personnelQuery.ilike('full_name', `%${search}%`);
+
+            const { data: personnelData, error: personnelError } = await personnelQuery.order('full_name');
+            if (personnelError) throw personnelError;
+
+            if (!personnelData || personnelData.length === 0) {
+                setTimesheetData([]);
+                setLoading(false);
+                return;
+            }
+
+            const personnelIds = personnelData.map(p => p.id);
+            const startDate = isYearlyView ? new Date(date.getFullYear(), 0, 1) : new Date(date.getFullYear(), date.getMonth(), 1);
+            const endDate = isYearlyView ? new Date(date.getFullYear(), 11, 31) : new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+            const { data: timesheetEntries, error: timesheetError } = await supabase
+                .from('timesheets')
+                .select('personnel_id, date, status')
+                .in('personnel_id', personnelIds)
+                .gte('date', startDate.toISOString())
+                .lte('date', endDate.toISOString());
+            if (timesheetError) throw timesheetError;
+
+            const combinedData = personnelData.map(person => {
+                const statuses: { [month: number]: { [day: number]: any } } = {};
+                const personEntries = timesheetEntries.filter(entry => entry.personnel_id === person.id);
+                
+                personEntries.forEach(entry => {
+                    const entryDate = new Date(entry.date);
+                    const month = entryDate.getUTCMonth();
+                    const day = entryDate.getUTCDate();
+                    if (!statuses[month]) {
+                        statuses[month] = {};
+                    }
+                    statuses[month][day] = entry.status;
+                });
+
+                return {
+                    personnel_id: person.id,
+                    full_name: person.full_name,
+                    statuses: statuses,
+                };
+            });
+
+            setTimesheetData(combinedData);
+        } catch (error: any) {
+            toast.error("Puantaj verileri çekilemedi.");
+            console.error("Puantaj Hatası:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [supabase, profile]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchTimesheet(currentDate, selectedRegion, searchQuery, showWholeYear);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [currentDate, selectedRegion, searchQuery, showWholeYear, fetchTimesheet]);
+
+    const changeMonth = (amount: number) => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            newDate.setMonth(newDate.getMonth() + amount);
+            return newDate;
+        });
+    };
+    
+    const handleYearChange = (year: number) => {
+        setCurrentDate(prev => {
+            const newDate = new Date(prev);
+            newDate.setFullYear(year);
+            return newDate;
+        });
+    };
+    
+    const clearFilters = () => {
+        setSelectedRegion('');
+        setSearchQuery('');
+    };
+
+    return (
+        <div className="p-4 md:p-8 text-white h-full flex flex-col">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <h1 className="text-3xl font-bold">Puantaj Cetveli</h1>
+                <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg">
+                    <select value={currentDate.getFullYear()} onChange={(e) => handleYearChange(Number(e.target.value))} className="bg-transparent text-xl font-semibold border-none focus:ring-0">
+                        {years.map(year => (<option key={year} value={year}>{year}</option>))}
+                    </select>
+                    {!showWholeYear && (
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => changeMonth(-1)} className="p-2 rounded-md hover:bg-white/10"><ChevronLeft /></button>
+                            <span className="text-xl font-semibold w-36 text-center">
+                                {currentDate.toLocaleDateString('tr-TR', { month: 'long' })}
+                            </span>
+                            <button onClick={() => changeMonth(1)} className="p-2 rounded-md hover:bg-white/10"><ChevronRight /></button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}} className="mb-6 !p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 text-lg font-semibold">
+                        <Filter size={20} />
+                        <h3>Filtreler</h3>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                        <div className="relative w-full sm:w-auto">
+                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Personel ara..." className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10" />
+                        </div>
+                        <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10">
+                            <option value="">Tüm Bölgeler</option>
+                            {regions.map(region => (<option key={region.id} value={region.id}>{region.name}</option>))}
+                        </select>
+                        {(selectedRegion || searchQuery) && (<button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white"><X size={16}/> Temizle</button>)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" id="showYear" checked={showWholeYear} onChange={(e) => setShowWholeYear(e.target.checked)} className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"/>
+                        <label htmlFor="showYear" className="text-sm font-medium">Tüm Yılı Göster</label>
+                    </div>
+                </div>
+            </GlassCard>
+            
+            <div className="flex-1 overflow-auto bg-gray-900/50 backdrop-blur-md border border-white/10 rounded-xl">
+                {loading ? <div className="text-center p-10">Yükleniyor...</div> : (
+                    <table className="w-full border-collapse">
+                        {showWholeYear ? (
+                            <>
+                                <thead className="sticky top-0 bg-gray-800 z-10">
+                                    <tr>
+                                        <th rowSpan={2} className="sticky left-0 bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[200px]">Personel</th>
+                                        {months.map(month => (
+                                            <th key={month} colSpan={getDaysInMonth(currentDate.getFullYear(), month)} className="p-2 border-r border-b border-gray-700 text-center">
+                                                {new Date(currentDate.getFullYear(), month).toLocaleDateString('tr-TR', { month: 'short' })}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                    <tr>
+                                        {months.flatMap(month =>
+                                            Array.from({ length: getDaysInMonth(currentDate.getFullYear(), month) }, (_, i) => i + 1).map(day => (
+                                                <th key={`${month}-${day}`} className="p-2 border-r border-b border-gray-700 text-center min-w-[40px] text-xs">{day}</th>
+                                            ))
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {timesheetData.map(person => (
+                                        <tr key={person.personnel_id} className="hover:bg-white/5">
+                                            <td className="sticky left-0 bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold whitespace-nowrap">{person.full_name}</td>
+                                            {months.flatMap(month =>
+                                                Array.from({ length: getDaysInMonth(currentDate.getFullYear(), month) }, (_, i) => i + 1).map(day => {
+                                                    // DÜZELTİLMİŞ MANTIK
+                                                    const status = person.statuses?.[month]?.[day];
+                                                    let finalStatus: keyof typeof statusStyles;
+                                                    if (status) {
+                                                        finalStatus = status;
+                                                    } else {
+                                                        const dateForDay = new Date(Date.UTC(currentDate.getFullYear(), month, day));
+                                                        const dayOfWeek = dateForDay.getUTCDay(); // 0: Sunday, 6: Saturday
+                                                        if (weekendConfiguration === 'saturday_sunday' && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                                                            finalStatus = 'Hafta Sonu';
+                                                        } else if (weekendConfiguration === 'sunday_only' && dayOfWeek === 0) {
+                                                            finalStatus = 'Hafta Sonu';
+                                                        } else {
+                                                            finalStatus = 'Çalıştı';
+                                                        }
+                                                    }
+                                                    const style = statusStyles[finalStatus];
+                                                    return (
+                                                        <td key={`${month}-${day}`} title={finalStatus} className={`p-2 border-r border-b border-gray-700 text-center text-xs font-bold ${style.className}`}>{style.abbr}</td>
+                                                    );
+                                                })
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </>
+                        ) : (
+                            <>
+                                <thead className="sticky top-0 bg-gray-800 z-10">
+                                    <tr>
+                                        <th className="sticky left-0 bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[200px]">Personel</th>
+                                        {monthDays.map(day => (<th key={day} className="p-2 border-r border-b border-gray-700 text-center min-w-[50px]">{day}</th>))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {timesheetData.length > 0 ? (
+                                        timesheetData.map((person) => (
+                                            <tr key={person.personnel_id} className="hover:bg-white/5">
+                                                <td className="sticky left-0 bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold whitespace-nowrap">{person.full_name}</td>
+                                                {monthDays.map((day) => {
+                                                    // DÜZELTİLMİŞ MANTIK
+                                                    const status = person.statuses?.[currentDate.getMonth()]?.[day];
+                                                    let finalStatus: keyof typeof statusStyles;
+                                                    if (status) {
+                                                        finalStatus = status;
+                                                    } else {
+                                                        const dateForDay = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), day));
+                                                        const dayOfWeek = dateForDay.getUTCDay(); // 0: Sunday, 6: Saturday
+                                                        if (weekendConfiguration === 'saturday_sunday' && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                                                            finalStatus = 'Hafta Sonu';
+                                                        } else if (weekendConfiguration === 'sunday_only' && dayOfWeek === 0) {
+                                                            finalStatus = 'Hafta Sonu';
+                                                        } else {
+                                                            finalStatus = 'Çalıştı';
+                                                        }
+                                                    }
+                                                    const style = statusStyles[finalStatus];
+                                                    return (
+                                                        <td key={day} title={finalStatus} className={`p-2 border-r border-b border-gray-700 text-center text-xs font-bold ${style.className}`}>{style.abbr}</td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth()) + 1} className="text-center p-8 text-gray-400">Filtrelerle eşleşen personel bulunamadı.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </>
+                        )}
+                    </table>
+                )}
+            </div>
+        </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\AddPersonnelModal.tsx =====
+"use client";
+
+import { useState, useEffect, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { addPersonnel } from '@/app/actions';
+import { X, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from './GlassCard'; // GlassCard'ı import ediyoruz
+
+type Region = {
+  id: number;
+  name: string;
+};
+
+type ModalProps = {
+  onClose: () => void;
+  onPersonnelAdded: () => void;
+};
+
+export default function AddPersonnelModal({ onClose, onPersonnelAdded }: ModalProps) {
+  // GÜNCELLENDİ: GlassCard stilleri için context'ten ayarları çekiyoruz
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchRegions = async () => {
+      const { data, error } = await supabase.from('regions').select('id, name');
+      if (error) {
+        toast.error('Bölgeler yüklenemedi.');
+      } else {
+        setRegions(data);
+      }
+    };
+    fetchRegions();
+  }, [supabase]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await addPersonnel(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      onPersonnelAdded();
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {/* GÜNCELLENDİ: Form artık GlassCard ile sarmalanıyor */}
+      <GlassCard
+        tintValue={tintValue}
+        blurPx={blurPx}
+        borderRadiusPx={borderRadiusPx}
+        grainOpacity={grainOpacity}
+        className="w-full max-w-lg"
+      >
+        <form onSubmit={handleSubmit}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Yeni Personel Ekle</h2>
+            <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <input name="full_name" required placeholder="Ad Soyad" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input name="tc_kimlik_no" required maxLength={11} placeholder="T.C. Kimlik Numarası" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input name="email" type="email" required placeholder="E-posta Adresi" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">İşe Başlama Tarihi</label>
+              <input name="start_date" type="date" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark] focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <select name="region_id" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="">Bölge Seçin...</option>
+              {regions.map(region => (
+                <option key={region.id} value={region.id}>{region.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+              <Save size={16} />
+              {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\AddRegionModal.tsx =====
+"use client";
+
+import { useState, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { addRegion } from '@/app/actions';
+import { X, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from './GlassCard';
+
+export default function AddRegionModal({ onClose, onRegionAdded }: { onClose: () => void; onRegionAdded: () => void; }) {
+  const { tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await addRegion(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      onRegionAdded();
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}} className="w-full max-w-md">
+        <form onSubmit={handleSubmit}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Yeni Bölge Ekle</h2>
+            <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10"><X size={24} /></button>
+          </div>
+          <div className="space-y-4">
+            <input name="name" required placeholder="Bölge Adı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
+          </div>
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+              <Save size={16} />
+              {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\ConfirmModal.tsx =====
+"use client";
+
+import { useSettings } from "@/contexts/SettingsContext";
+import GlassCard from "./GlassCard";
+import { AlertTriangle, Check, X } from "lucide-react";
+import { useState } from "react";
+
+type ConfirmModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>; // Onay fonksiyonu artık bir Promise döndürecek
+  title: string;
+  message: string;
+};
+
+export default function ConfirmModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message 
+}: ConfirmModalProps) {
+  const { tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+    await onConfirm();
+    // İşlem bittikten sonra state'i sıfırla. Kapatma işlemini parent bileşen yönetecek.
+    setIsSubmitting(false);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+      <GlassCard
+        tintValue={tintValue}
+        blurPx={blurPx}
+        borderRadiusPx={borderRadiusPx}
+        grainOpacity={grainOpacity}
+        className="w-full max-w-md"
+      >
+        <div className="flex items-start gap-4">
+          <div className="mt-1 flex-shrink-0 w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold">{title}</h3>
+            <p className="mt-1 text-gray-300">{message}</p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-4 mt-6">
+          <button 
+            onClick={onClose} 
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors disabled:opacity-50"
+          >
+            İptal
+          </button>
+          <button 
+            onClick={handleConfirm} 
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Check size={16} />
+            {isSubmitting ? 'İşleniyor...' : 'Onayla ve Sil'}
+          </button>
+        </div>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\CreateLeaveModal.tsx =====
+"use client";
+
+import { useState, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { createLeaveForPersonnel } from '@/app/actions';
+import { X, CalendarPlus } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from './GlassCard';
+import type { Personnel } from '@/app/dashboard/personnel/page';
+
+type ModalProps = {
+  personnel: Personnel;
+  onClose: () => void;
+};
+
+export default function CreateLeaveModal({ personnel, onClose }: ModalProps) {
+  const { tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await createLeaveForPersonnel(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <GlassCard
+        tintValue={tintValue}
+        blurPx={blurPx}
+        borderRadiusPx={borderRadiusPx}
+        grainOpacity={grainOpacity}
+        className="w-full max-w-lg"
+      >
+        <form onSubmit={handleSubmit}>
+          <input type="hidden" name="personnel_id" value={personnel.id} />
+          
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">İzin Talebi Oluştur</h2>
+              <p className="text-gray-300">{personnel.full_name} adına</p>
+            </div>
+            <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-1/2">
+                <label className="text-sm text-gray-400 mb-1 block">Başlangıç Tarihi</label>
+                <input name="start_date" type="date" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark]" />
+              </div>
+              <div className="w-full sm:w-1/2">
+                <label className="text-sm text-gray-400 mb-1 block">Bitiş Tarihi</label>
+                <input name="end_date" type="date" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark]" />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">İzin Türü</label>
+              <select name="leave_type" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10">
+                <option value="">Seçiniz...</option>
+                <option value="yıllık izin">Yıllık İzin</option>
+                <option value="ücretli izin">Ücretli İzin (Mazeret)</option>
+                <option value="ücretsiz izin">Ücretsiz İzin</option>
+                <option value="raporlu">Raporlu (İstirahat)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Açıklama (Opsiyonel)</label>
+              <textarea name="reason" placeholder="İzinle ilgili açıklama..." className="w-full bg-black/20 p-3 rounded-lg border border-white/10" rows={3}></textarea>
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+              <CalendarPlus size={16} />
+              {isSubmitting ? 'Oluşturuluyor...' : 'Talep Oluştur'}
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\EditPersonnelModal.tsx =====
+"use client";
+
+import { useState, useEffect, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { updatePersonnel } from '@/app/actions';
+import { X, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from './GlassCard';
+import type { Personnel } from '@/app/dashboard/personnel/page';
+
+type Region = {
+  id: number;
+  name: string;
+};
+
+type ModalProps = {
+  personnelToEdit: Personnel;
+  onClose: () => void;
+  onPersonnelUpdated: () => void;
+};
+
+export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonnelUpdated }: ModalProps) {
+  const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchRegions = async () => {
+      const { data, error } = await supabase.from('regions').select('id, name');
+      if (error) toast.error('Bölgeler yüklenemedi.');
+      else setRegions(data);
+    };
+    fetchRegions();
+  }, [supabase]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await updatePersonnel(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      onPersonnelUpdated();
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <GlassCard
+        tintValue={tintValue}
+        blurPx={blurPx}
+        borderRadiusPx={borderRadiusPx}
+        grainOpacity={grainOpacity}
+        className="w-full max-w-lg"
+      >
+        <form onSubmit={handleSubmit}>
+          {/* Formun içine personelin ID'sini gizli bir input olarak ekliyoruz */}
+          <input type="hidden" name="id" value={personnelToEdit.id} />
+          
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Personel Düzenle</h2>
+            <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            {/* defaultValue kullanarak inputları mevcut veriyle dolduruyoruz */}
+            <input name="full_name" required defaultValue={personnelToEdit.full_name} placeholder="Ad Soyad" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input name="tc_kimlik_no" required maxLength={11} defaultValue={personnelToEdit.tc_kimlik_no} placeholder="T.C. Kimlik Numarası" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input name="email" type="email" required defaultValue={personnelToEdit.email} placeholder="E-posta Adresi" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">İşe Başlama Tarihi</label>
+              <input name="start_date" type="date" required defaultValue={personnelToEdit.start_date} className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark] focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <select name="region_id" required defaultValue={regions.find(r => r.id === (personnelToEdit as any).region_id)?.id} className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="">Bölge Seçin...</option>
+              {regions.map(region => (
+                <option key={region.id} value={region.id}>{region.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+              <Save size={16} />
+              {isSubmitting ? 'Güncelleniyor...' : 'Güncelle'}
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\EditRegionModal.tsx =====
+"use client";
+
+import { useState, FormEvent } from 'react';
+import { useSettings } from '@/contexts/SettingsContext';
+import { updateRegion } from '@/app/actions';
+import { X, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
+import GlassCard from './GlassCard';
+
+type Region = { id: number; name: string; };
+
+export default function EditRegionModal({ region, onClose, onRegionUpdated }: { region: Region; onClose: () => void; onRegionUpdated: () => void; }) {
+  const { tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const result = await updateRegion(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      onRegionUpdated();
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}} className="w-full max-w-md">
+        <form onSubmit={handleSubmit}>
+          <input type="hidden" name="id" value={region.id} />
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Bölgeyi Düzenle</h2>
+            <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10"><X size={24} /></button>
+          </div>
+          <div className="space-y-4">
+            <input name="name" required defaultValue={region.name} placeholder="Bölge Adı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
+          </div>
+          <div className="flex justify-end mt-6">
+            <button type="submit" disabled={isSubmitting} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+              <Save size={16} />
+              {isSubmitting ? 'Güncelleniyor...' : 'Güncelle'}
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\GlassCard.tsx =====
+import { ReactNode } from "react";
+
+export default function GlassCard({
+  children,
+  tintValue = 15,
+  blurPx = 16,
+  borderRadiusPx = 16,
+  grainOpacity = 20,
+  className = "",
+}: {
+  children: ReactNode;
+  tintValue?: number;
+  blurPx?: number;
+  borderRadiusPx?: number;
+  grainOpacity?: number;
+  className?: string;
+}) {
+  const grainEffectOpacity = grainOpacity / 100;
+
+  const color = tintValue >= 0 ? '255, 255, 255' : '0, 0, 0';
+  const alpha = Math.abs(tintValue) / 100;
+
+  return (
+    <div
+      style={{
+        backgroundColor: `rgba(${color}, ${alpha})`,
+        backdropFilter: `blur(${blurPx}px)`,
+        borderRadius: `${borderRadiusPx}px`,
+      }}
+      className={`
+        p-6 md:p-8
+        border border-white/20
+        shadow-lg relative overflow-hidden
+        ${className} 
+      `}
+    >
+      <div
+        className="absolute inset-0 bg-[url('/noise.png')] pointer-events-none"
+        style={{
+          opacity: grainEffectOpacity,
+        }}
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\Pagination.tsx =====
+"use client";
+
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+type PaginationProps = {
+  currentPage: number;
+  totalCount: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+};
+
+export default function Pagination({ currentPage, totalCount, pageSize, onPageChange }: PaginationProps) {
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  if (totalPages <= 1) {
+    return null; // Eğer tek sayfa varsa veya hiç veri yoksa, gösterme
+  }
+
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+    }
+  };
+
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalCount);
+
+  return (
+    <div className="flex items-center justify-between text-sm text-gray-300 px-4 py-3">
+      <div>
+        <span className="font-semibold">{totalCount}</span> kayıttan <span className="font-semibold">{startItem}-{endItem}</span> arası gösteriliyor.
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handlePrevious}
+          disabled={currentPage === 1}
+          className="p-2 rounded-md hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <span>
+          Sayfa <span className="font-semibold">{currentPage}</span> / <span className="font-semibold">{totalPages}</span>
+        </span>
+        <button
+          onClick={handleNext}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-md hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\RequestDetailsModal.tsx =====
+"use client";
+
+import { useState, FormEvent, useEffect } from 'react';
+import { X, Check, Trash2, User, Calendar, History, MessageSquare, Edit } from 'lucide-react';
+import { coordinatorApprove, coordinatorReject, adminApprove, adminReject, updateLeaveRequestDates } from '@/app/actions';
+import toast from 'react-hot-toast';
+import type { LeaveRequest } from '@/app/dashboard/requests/page';
+import { useSettings } from '@/contexts/SettingsContext';
+import { calculateWorkingDays } from '@/lib/utils';
+
+type ModalProps = {
+  request: LeaveRequest;
+  onClose: () => void;
+};
+
+export default function RequestDetailsModal({ request, onClose }: ModalProps) {
+  const { profile, supabase, weekendConfiguration } = useSettings();
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingDates, setIsEditingDates] = useState(false);
+  const [newStartDate, setNewStartDate] = useState(request.start_date);
+  const [newEndDate, setNewEndDate] = useState(request.end_date);
+  const [workingDays, setWorkingDays] = useState<number | null>(null);
+
+  useEffect(() => {
+    const calculateDays = async () => {
+      const { data: holidaysData } = await supabase.from('official_holidays').select('date');
+      const holidayDates = holidaysData ? holidaysData.map(h => h.date) : [];
+      
+      const days = calculateWorkingDays(request.start_date, request.end_date, holidayDates, weekendConfiguration);
+      setWorkingDays(days);
+    };
+    calculateDays();
+  }, [request.start_date, request.end_date, supabase, weekendConfiguration]);
+
+  const handleAction = async (action: 'approve' | 'reject') => {
+    setIsSubmitting(true);
+    let result;
+    if (profile?.role === 'admin') {
+      result = action === 'approve' 
+        ? await adminApprove(request.id, notes) 
+        : await adminReject(request.id, notes);
+    } else if (profile?.role === 'coordinator') {
+      result = action === 'approve'
+        ? await coordinatorApprove(request.id, notes)
+        : await coordinatorReject(request.id, notes);
+    } else {
+      toast.error("Bu işlemi yapma yetkiniz yok.");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    if (result && result.success) {
+      toast.success(result.message);
+      onClose();
+    } else if(result) {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleUpdateDates = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    const originalDates = `${new Date(request.start_date).toLocaleDateString('tr-TR')} - ${new Date(request.end_date).toLocaleDateString('tr-TR')}`;
+    formData.append('original_dates', originalDates);
+    
+    const result = await updateLeaveRequestDates(formData);
+
+    if (result.success) {
+      toast.success(result.message);
+      setIsEditingDates(false);
+      onClose();
+    } else {
+      toast.error(result.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  const canEditDates = profile?.role === 'admin' || (profile?.role === 'coordinator' && request.status === 'pending');
+  const canCoordinatorAct = profile?.role === 'coordinator' && request.status === 'pending';
+  const canAdminAct = profile?.role === 'admin';
+  const canTakeAction = canAdminAct || canCoordinatorAct;
+
+  const approveText = profile?.role === 'admin' ? 'Nihai Onay' : 'Koordinatör Onayı';
+  const rejectText = profile?.role === 'admin' ? 'Nihai Red' : 'Koordinatör Reddi';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800/80 border border-white/10 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">İzin Talebi Detayı</h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto pr-2 flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <User className="text-gray-400" />
+              <div>
+                <p className="text-sm text-gray-400">Personel</p>
+                <p className="font-semibold text-lg">{request.personnel_full_name || 'Bilinmiyor'}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Calendar className="text-gray-400 mt-1" />
+              {isEditingDates ? (
+                <form onSubmit={handleUpdateDates} className="w-full">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="requestId" value={request.id} />
+                    <input type="date" name="start_date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)} className="flex-1 min-w-[130px] bg-black/20 p-2 rounded-lg border border-white/10 [color-scheme:dark]" />
+                    <span>-</span>
+                    <input type="date" name="end_date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)} className="flex-1 min-w-[130px] bg-black/20 p-2 rounded-lg border border-white/10 [color-scheme:dark]" />
+                    <div className="flex gap-2">
+                      <button type="submit" className="p-2 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-50" disabled={isSubmitting}><Check size={16}/></button>
+                      <button type="button" onClick={() => setIsEditingDates(false)} className="p-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={isSubmitting}><X size={16}/></button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div>
+                    <p className="text-sm text-gray-400">İzin Tarihleri</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-lg">
+                        {new Date(request.start_date).toLocaleDateString('tr-TR')} - {new Date(request.end_date).toLocaleDateString('tr-TR')}
+                      </p>
+                      {workingDays !== null && (
+                        <span className="text-sm text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
+                          {workingDays} iş günü
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {canEditDates && (
+                     <button onClick={() => setIsEditingDates(true)} className="p-1 rounded-full hover:bg-white/10 ml-2 self-center"><Edit size={16}/></button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <h3 className="font-semibold mb-2 flex items-center gap-2"><History size={18}/>İşlem Geçmişi</h3>
+          <div className="space-y-3 bg-black/20 p-4 rounded-lg">
+            {request.history_log?.map((log, index) => (
+              <div key={index} className="border-l-2 pl-4 border-gray-600">
+                <p className="font-semibold">{log.action} <span className="text-sm font-normal text-gray-400">- {log.actor}</span></p>
+                <p className="text-sm text-gray-300 italic">"{log.notes}"</p>
+                <p className="text-xs text-gray-500 mt-1">{new Date(log.timestamp).toLocaleString('tr-TR')}</p>
+              </div>
+            ))}
+          </div>
+          
+          {canTakeAction && (
+            <div className="mt-6 border-t border-white/10 pt-4">
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  {request.status !== 'pending' && canAdminAct ? "Mevcut Durumu Değiştir" : "İşlem Yap"}
+              </h3>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="İşlem notunuzu buraya yazabilirsiniz..."
+                className="w-full bg-black/20 p-2 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                rows={3}
+              />
+              <div className="flex justify-end gap-4 mt-4">
+                <button 
+                  onClick={() => handleAction('reject')}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Trash2 size={16} /> {rejectText}
+                </button>
+                <button 
+                  onClick={() => handleAction('approve')}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600/80 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Check size={16} /> {approveText}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\SettingsModal.tsx =====
+"use client";
+
+import GlassCard from "./GlassCard";
+import toast from 'react-hot-toast';
+
+import { createClient } from "@/lib/supabase/client"; // GÜNCELLENDİ: Doğru istemci import edildi
+
+
+const supabase = createClient();
+
+const backgroundImages = Array.from({ length: 15 }, (_, i) => `/backgrounds/bg${i + 1}.jpg`);
+
+type SettingsModalProps = {
+  onClose: () => void;
+  bg: string; setBg: (bg: string) => void;
+  tintValue: number; setTintValue: (value: number) => void;
+  grainOpacity: number; setGrainOpacity: (opacity: number) => void;
+  blurPx: number; setBlurPx: (px: number) => void;
+  borderRadiusPx: number; setBorderRadiusPx: (px: number) => void;
+};
+
+export default function SettingsModal({ 
+  onClose, 
+  bg, setBg, 
+  tintValue, setTintValue, 
+  grainOpacity, setGrainOpacity,
+  blurPx, setBlurPx,
+  borderRadiusPx, setBorderRadiusPx
+}: SettingsModalProps) {
+  
+  const handleSave = async () => {
+    const toastId = toast.loading('Ayarlar kaydediliyor...');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Ayarları kaydetmek için giriş yapmalısınız.", { id: toastId });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("user_settings")
+      .upsert({
+          user_id: user.id,
+          background_url: bg,
+          glass_opacity: tintValue,
+          grain_opacity: grainOpacity,
+          glass_blur_px: blurPx,
+          glass_border_radius_px: borderRadiusPx,
+        },{ onConflict: 'user_id' });
+
+    if (error) { toast.error("Hata: " + error.message, { id: toastId }); } 
+    else { toast.success("Ayarlar başarıyla kaydedildi!", { id: toastId }); onClose(); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800/80 backdrop-blur-xl border border-white/20 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold mb-4">Arayüz Ayarları</h2>
+        
+        <div className="mb-6">
+          <h3 className="font-semibold mb-2">Arkaplan Seçimi</h3>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
+            {backgroundImages.map((img) => (
+              <img
+                key={img}
+                src={img}
+                alt={`Arkaplan ${img}`}
+                onClick={() => setBg(img)}
+                className={`w-full h-16 object-cover rounded-md cursor-pointer transition-all ${bg === img ? 'ring-2 ring-blue-500 scale-105' : 'opacity-70 hover:opacity-100'}`}
+              />
+            ))}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+                <label htmlFor="tintValue" className="font-semibold mb-2 block">
+                    Kart Rengi (Siyah ← 0 → Beyaz): {tintValue}
+                </label>
+                <input id="tintValue" type="range" min="-50" max="50" step="5" value={tintValue} onChange={(e) => setTintValue(Number(e.target.value))} className="w-full h-2 bg-gradient-to-r from-gray-800 via-gray-500 to-gray-200 rounded-lg appearance-none cursor-pointer" />
+            </div>
+            
+            <div>
+                <label htmlFor="grain" className="font-semibold mb-2 block">
+                    Gren Efekti Yoğunluğu: {grainOpacity}
+                </label>
+                <input id="grain" type="range" min="0" max="50" step="5" value={grainOpacity} onChange={(e) => setGrainOpacity(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
+            </div>
+            <div>
+                <label htmlFor="blur" className="font-semibold mb-2 block">
+                    Bulanıklık: {blurPx}px
+                </label>
+                <input id="blur" type="range" min="0" max="40" step="1" value={blurPx} onChange={(e) => setBlurPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
+            </div>
+            <div>
+                <label htmlFor="borderRadius" className="font-semibold mb-2 block">
+                    Köşe Yumuşaklığı: {borderRadiusPx}px
+                </label>
+                <input id="borderRadius" type="range" min="0" max="32" step="1" value={borderRadiusPx} onChange={(e) => setBorderRadiusPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
+            </div>
+        </div>
+
+        <div className="mt-6 border-t border-white/10 pt-4">
+            <h3 className="font-semibold mb-3 text-center">Önizleme</h3>
+            <div className="p-8 rounded-lg bg-cover bg-center transition-all duration-300" style={{ backgroundImage: `url(${bg})` }}>
+                <GlassCard 
+                    tintValue={tintValue} 
+                    grainOpacity={grainOpacity}
+                    blurPx={blurPx}
+                    borderRadiusPx={borderRadiusPx}
+                >
+                    <h4 className="font-bold text-lg text-white">Örnek Kart</h4>
+                    <p className="text-sm text-gray-200">Ayarlarınız burada anlık olarak gösterilir.</p>
+                </GlassCard>
+            </div>
+        </div>
+
+        <div className="flex justify-end gap-4 mt-6">
+          <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg">İptal</button>
+          <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">Kaydet</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\components\Sidebar.tsx =====
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Building2, Settings, Map, ClipboardList } from 'lucide-react';
+import { useSettings } from "@/contexts/SettingsContext";
+
+// Ana navigasyon linkleri
+const navLinks = [
+  { name: "Ana Panel", href: "/dashboard", icon: Home },
+  { name: "İzin Talepleri", href: "/dashboard/requests", icon: Briefcase },
+  { name: "Personel Listesi", href: "/dashboard/personnel", icon: Users },
+  { name: "Takvim", href: "/dashboard/calendar", icon: Calendar },
+  { name: "Puantaj Cetveli", href: "/dashboard/timesheet", icon: ClipboardList }
+];
+
+// Sadece adminlerin görebileceği linkler
+const adminLinks = [
+    { name: "Sistem Ayarları", href: "/dashboard/settings", icon: Settings },
+    { name: "Bölgeler", href: "/dashboard/regions", icon: Map }
+];
+
+type SidebarProps = {
+  mobileOpen: boolean;
+  setMobileOpen: (isOpen: boolean) => void;
+  isCollapsed: boolean;
+  setIsCollapsed: (isCollapsed: boolean) => void;
+};
+
+export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsCollapsed }: SidebarProps) {
+  const pathname = usePathname();
+  // Gerekli tüm bilgiler merkezi context'ten geliyor
+  const { profile, tintValue, grainOpacity, blurPx } = useSettings();
+
+  // GlassCard stili için gerekli hesaplamalar
+  const grainEffectOpacity = grainOpacity / 100;
+  const color = tintValue >= 0 ? '255, 255, 255' : '0, 0, 0';
+  const alpha = Math.abs(tintValue) / 100;
+
+  return (
+    <>
+      {/* Mobil'de arkaplan karartma */}
+      <div 
+        onClick={() => setMobileOpen(false)}
+        className={`fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
+      />
+
+      {/* Sidebar Ana Bileşeni */}
+      <aside 
+        className={`fixed top-0 left-0 h-screen border-r border-white/10 text-white flex flex-col z-40 transition-all duration-300 ease-in-out  
+                    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} 
+                    md:translate-x-0 
+                    ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
+                    overflow-hidden`}
+        style={{
+          backgroundColor: `rgba(${color}, ${alpha})`,
+          backdropFilter: `blur(${blurPx}px)`,
+        }}
+      >
+        {/* Grain efekti için overlay */}
+        <div className="absolute inset-0 bg-[url('/noise.png')] pointer-events-none" style={{ opacity: grainEffectOpacity }} />
+
+        <div className="relative z-10 flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 h-[69px] border-b border-white/10">
+            <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? 'md:justify-center' : ''}`}>
+              <Building2 className="w-8 h-8 flex-shrink-0" />
+              <span className={`text-xl font-bold whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>İK Portalı</span>
+            </div>
+          </div>
+          
+          {/* Navigasyon */}
+          <nav className="flex-1 p-2 overflow-y-auto">
+            {/* Genel Linkler */}
+            <ul>
+              {navLinks.map((link) => {
+                const isActive = pathname === link.href;
+                return (
+                  <li key={link.name} className="group">
+                    <Link
+                      href={link.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-2 ${
+                        isActive ? "bg-blue-600/30 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white"}
+                        ${isCollapsed ? 'md:justify-center' : ''}`}
+                    >
+                      <link.icon className="w-5 h-5 flex-shrink-0" />
+                      <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                        {link.name}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Sadece adminlerin göreceği bölüm */}
+            {profile?.role === 'admin' && (
+              <>
+                <div className={`px-4 mt-4 mb-2 text-xs font-semibold text-gray-400 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
+                <ul>
+                  {adminLinks.map((link) => {
+                    const isActive = pathname === link.href;
+                    return (
+                      <li key={link.name} className="group">
+                        <Link
+                          href={link.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-2 ${
+                            isActive ? "bg-blue-600/30 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white"}
+                            ${isCollapsed ? 'md:justify-center' : ''}`}
+                        >
+                          <link.icon className="w-5 h-5 flex-shrink-0" />
+                          <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                            {link.name}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </nav>
+          
+          {/* Footer - Daralt/Genişlet Butonu */}
+          <div className="p-4 border-t border-white/10">
+            <button 
+              onClick={() => setIsCollapsed(!isCollapsed)} 
+              className="hidden md:flex items-center justify-center w-full gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+            >
+              {isCollapsed ? <ChevronsRight className="w-5 h-5"/> : <ChevronsLeft className="w-5 h-5"/>}
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\contexts\SettingsContext.tsx =====
+"use client";
+
+import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+
+const supabase = createClient();
+
+type Profile = {
+  full_name: string;
+  role: string;
+  region_id: number | null;
+};
+
+// YENİ: Hafta sonu ayarı için tip
+type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
+
+type SettingsContextType = {
+  supabase: SupabaseClient;
+  user: User | null;
+  profile: Profile | null;
+  weekendConfiguration: WeekendConfiguration; // YENİ
+  bg: string;
+  setBg: (bg: string) => void;
+  tintValue: number;
+  setTintValue: (value: number) => void;
+  grainOpacity: number;
+  setGrainOpacity: (opacity: number) => void;
+  blurPx: number;
+  setBlurPx: (px: number) => void;
+  borderRadiusPx: number;
+  setBorderRadiusPx: (px: number) => void;
+};
+
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+
+export function SettingsProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [bg, setBg] = useState("/backgrounds/bg1.jpg");
+  const [tintValue, setTintValue] = useState(15);  
+  const [grainOpacity, setGrainOpacity] = useState(20);
+  const [blurPx, setBlurPx] = useState(16);
+  const [borderRadiusPx, setBorderRadiusPx] = useState(16);
+  // YENİ: Hafta sonu ayarı için state
+  const [weekendConfiguration, setWeekendConfiguration] = useState<WeekendConfiguration>('saturday_sunday');
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+
+        // Kullanıcı profili ve ayarlarını paralel olarak çek
+        const [profileRes, settingsRes, weekendRes] = await Promise.all([
+          supabase.from("profiles").select('*').eq('id', user.id).single(),
+          supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
+          supabase.from("system_settings").select("value").eq("key", "weekend_configuration").single()
+        ]);
+
+        if (profileRes.data) setProfile(profileRes.data);
+        if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
+        
+        if (settingsRes.data) {
+          const userSettings = settingsRes.data;
+          setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
+          setTintValue(userSettings.glass_opacity === null ? 15 : userSettings.glass_opacity);
+          setGrainOpacity(userSettings.grain_opacity === null ? 20 : userSettings.grain_opacity);
+          setBlurPx(userSettings.glass_blur_px === null ? 16 : userSettings.glass_blur_px);
+          setBorderRadiusPx(userSettings.glass_border_radius_px === null ? 16 : userSettings.glass_border_radius_px);
+        }
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  const value = {
+    supabase,
+    user,
+    profile,
+    weekendConfiguration, // YENİ
+    bg, setBg,
+    tintValue, setTintValue,
+    grainOpacity, setGrainOpacity,
+    blurPx, setBlurPx,
+    borderRadiusPx, setBorderRadiusPx
+  };
+
+  return (
+    <SettingsContext.Provider value={value}>
+      {children}
+    </SettingsContext.Provider>
+  );
+}
+
+export function useSettings() {
+  const context = useContext(SettingsContext);
+  if (context === undefined) {
+    throw new Error('useSettings must be used within a SettingsProvider');
+  }
+  return context;
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\lib\utils.ts =====
+type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
+
+export function calculateWorkingDays(
+  startDate: string,
+  endDate: string,
+  holidays: string[] = [],
+  weekendConfig: WeekendConfiguration = 'saturday_sunday' // YENİ PARAMETRE
+): number {
+  let count = 0;
+  const currentDate = new Date(startDate);
+  const lastDate = new Date(endDate);
+  
+  currentDate.setUTCHours(12,0,0,0);
+  lastDate.setUTCHours(12,0,0,0);
+  
+  while (currentDate <= lastDate) {
+    const dayOfWeek = currentDate.getUTCDay(); // 0 = Pazar, 6 = Cumartesi
+    
+    // YENİ: Hafta sonu mantığı artık dinamik
+    const isWeekend = weekendConfig === 'saturday_sunday'
+      ? dayOfWeek === 0 || dayOfWeek === 6
+      : dayOfWeek === 0;
+      
+    const isoDate = currentDate.toISOString().split('T')[0];
+    const isHoliday = holidays.includes(isoDate);
+
+    if (!isWeekend && !isHoliday) {
+      count++;
+    }
+    
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+  
+  return count;
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\lib\supabase\admin.ts =====
+import { createClient } from '@supabase/supabase-js';
+
+// Bu istemci, service_role anahtarını kullanarak RLS'i atlar.
+// SADECE GÜVENLİ SUNUCU ORTAMLARINDA (Server Actions) KULLANILMALIDIR.
+export const createAdminClient = () => {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase URL veya Service Role Key bulunamadı.');
+  }
+
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+};
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\lib\supabase\client.ts =====
+import { createBrowserClient } from '@supabase/ssr'
+
+// GÜNCELLENDİ: Bu fonksiyon, tarayıcıda çalışacak olan Supabase istemcisini oluşturur.
+// Bu, sunucu tarafında ayarlanan cookie'leri okuyabilmesini sağlar.
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+
+
+
+===== C:\Users\emreg\ik-yonetim-sistemi\src\lib\supabase\server.ts =====
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export function createClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        // GÜNCELLENDİ: 'cookies()' fonksiyonu her kullanımda 'await' ile bekleniyor.
+        async get(name: string) {
+          return (await cookies()).get(name)?.value
+        },
+        async set(name: string, value: string, options: CookieOptions) {
+          try {
+            (await cookies()).set({ name, value, ...options })
+          } catch (error) {
+            // Server Action ve Route Handler'lar cookie ayarlayabilir,
+            // ancak Server Component'ler ayarlayamaz. Bu yüzden bu hata normaldir.
+          }
+        },
+        async remove(name: string, options: CookieOptions) {
+          try {
+            (await cookies()).set({ name, value: '', ...options })
+          } catch (error) {
+            // Yukarıdakiyle aynı.
+          }
+        },
+      },
+    }
+  )
+}
+
+
+

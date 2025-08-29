@@ -29,3 +29,70 @@ html, body {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 999px;
 }
+
+
+/* --- FullCalendar Koyu Tema Ayarlamaları --- */
+
+/* Genel Butonlar ve Başlık */
+.fc .fc-button-primary {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+.fc .fc-button-primary:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+.fc .fc-toolbar-title {
+  color: #fff;
+  font-size: 1.5em !important;
+}
+
+/* Takvim Arka Planı ve Çizgileri */
+.fc .fc-daygrid-day {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.fc .fc-day-today {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Gün Başlıkları (Pzt, Salı...) */
+.fc .fc-col-header-cell {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+}
+
+/* Event (Etkinlik) Stilleri */
+/* Varsayılan event arka planını ve çerçevesini kaldır */
+.fc-daygrid-day-event {
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer;
+  padding: 1px 4px !important;
+  margin-top: 2px !important;
+}
+
+/* Özel render ettiğimiz metnin stili */
+.fc-event-title-custom, .fc-event-title {
+  color: #e5e7eb !important; /* gray-200 */
+  font-weight: 500 !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-daygrid-day-event:hover .fc-event-title-custom, .fc-daygrid-day-event:hover .fc-event-title {
+  color: #fff !important;
+  text-decoration: underline;
+}
+
+/* Resmi tatil gibi arka planı olmayan, blok eventler */
+.fc-event.fc-event-start.fc-event-end {
+  padding: 2px 4px !important;
+  border-radius: 4px;
+}
+
+/* Arka plan etkinliği için fare olaylarını devre dışı bırakma */
+.fc-bg-event {
+    pointer-events: none;
+}
