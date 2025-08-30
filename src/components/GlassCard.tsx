@@ -40,7 +40,7 @@ export default function GlassCard({
           opacity: grainEffectOpacity,
         }}
       />
-      <div className="relative z-10">{children}</div>
+      <div className="relative z-10 flex flex-col flex-1">{children}</div>
     </div>
   );
 }

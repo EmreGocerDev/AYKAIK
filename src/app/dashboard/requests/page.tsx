@@ -39,6 +39,7 @@ const statusColors: { [key in LeaveRequestStatus]: string } = {
   approved: 'bg-green-500/20 text-green-300 border-green-500/30',
   rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
 };
+
 const statusTranslations: { [key in LeaveRequestStatus]: string } = {
   pending: 'Beklemede',
   approved_by_coordinator: 'Koordinatör Onayladı',
@@ -47,6 +48,14 @@ const statusTranslations: { [key in LeaveRequestStatus]: string } = {
   rejected: 'Reddedildi',
 };
 
+// İzin türleri için sabit bir liste oluşturalım
+const leaveTypes = [
+    { value: 'yıllık izin', label: 'Yıllık İzin' },
+    { value: 'ücretli izin', label: 'Ücretli İzin (Mazeret)' },
+    { value: 'ücretsiz izin', label: 'Ücretsiz İzin' },
+    { value: 'raporlu', label: 'Raporlu (İstirahat)' },
+];
+
 export default function LeaveRequestsPage() {
   const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -54,6 +63,8 @@ export default function LeaveRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [regions, setRegions] = useState<Region[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('');
+  // --- YENİ EKLENDİ: İzin türü filtresi için state ---
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [totalRequests, setTotalRequests] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,13 +79,16 @@ export default function LeaveRequestsPage() {
     fetchRegions();
   }, [supabase]);
 
-  const fetchLeaveRequests = useCallback(async (page: number, regionId: string, search: string) => {
+  // --- GÜNCELLENDİ: fetchLeaveRequests fonksiyonu leaveType parametresi alacak ---
+  const fetchLeaveRequests = useCallback(async (page: number, regionId: string, search: string, leaveType: string) => {
     setLoading(true);
     const from = (page - 1) * PAGE_SIZE;
     
+    // --- GÜNCELLENDİ: RPC çağrısına leave_type_filter eklendi ---
     const { data, error } = await supabase.rpc('search_leave_requests', {
         region_filter_id: regionId ? Number(regionId) : null,
         search_query: search || null,
+        leave_type_filter: leaveType || null,
         limit_val: PAGE_SIZE,
         offset_val: from
     });
@@ -99,24 +113,28 @@ export default function LeaveRequestsPage() {
       return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // --- GÜNCELLENDİ: Filtreler değiştiğinde sayfayı başa al ---
   useEffect(() => {
       setCurrentPage(1);
-  }, [selectedRegion]);
+  }, [selectedRegion, selectedLeaveType]);
 
+  // --- GÜNCELLENDİ: useEffect, selectedLeaveType'ı dinleyecek ve fetch'e gönderecek ---
   useEffect(() => {
-    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery);
-  }, [currentPage, selectedRegion, debouncedSearchQuery, fetchLeaveRequests]);
+    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType);
+  }, [currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType, fetchLeaveRequests]);
 
   const handleModalClose = () => {
     setSelectedRequest(null);
-    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery);
+    fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType);
   }
 
+  // --- GÜNCELLENDİ: clearFilters fonksiyonu izin türü filtresini de temizleyecek ---
   const clearFilters = () => {
     setSelectedRegion('');
     setSearchQuery('');
+    setSelectedLeaveType('');
   };
-  
+
   return (
     <>
       <div className="p-4 md:p-8 text-white">
@@ -148,6 +166,17 @@ export default function LeaveRequestsPage() {
                     className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10"
                   />
                 </div>
+                {/* --- YENİ EKLENDİ: İzin türü için dropdown menüsü --- */}
+                <select
+                  value={selectedLeaveType}
+                  onChange={(e) => setSelectedLeaveType(e.target.value)}
+                  className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10"
+                >
+                  <option value="">Tüm İzin Türleri</option>
+                  {leaveTypes.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
                 <select
                   value={selectedRegion}
                   onChange={(e) => setSelectedRegion(e.target.value)}
@@ -158,7 +187,7 @@ export default function LeaveRequestsPage() {
                     <option key={region.id} value={region.id}>{region.name}</option>
                   ))}
                 </select>
-                {(selectedRegion || searchQuery) && (
+                {(selectedRegion || searchQuery || selectedLeaveType) && (
                   <button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
                     <X size={16}/> Temizle
                   </button>

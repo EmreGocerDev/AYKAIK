@@ -3,29 +3,38 @@
 import GlassCard from "./GlassCard";
 import toast from 'react-hot-toast';
 import { createClient } from "@/lib/supabase/client";
-import Image from "next/image"; // Next.js Image bileşeni import edildi
+import Image from "next/image";
+import { useSettings, ALL_WIDGETS, type WidgetDefinition } from "@/contexts/SettingsContext";
+import { useState } from "react";
 
 const supabase = createClient();
-
 const backgroundImages = Array.from({ length: 15 }, (_, i) => `/backgrounds/bg${i + 1}.jpg`);
+
 type SettingsModalProps = {
   onClose: () => void;
-  bg: string; setBg: (bg: string) => void;
-  tintValue: number;
-  setTintValue: (value: number) => void;
-  grainOpacity: number; setGrainOpacity: (opacity: number) => void;
-  blurPx: number; setBlurPx: (px: number) => void;
-  borderRadiusPx: number; setBorderRadiusPx: (px: number) => void;
 };
 
-export default function SettingsModal({ 
-  onClose, 
-  bg, setBg, 
-  tintValue, setTintValue, 
-  grainOpacity, setGrainOpacity,
-  blurPx, setBlurPx,
-  borderRadiusPx, setBorderRadiusPx
-}: SettingsModalProps) {
+export default function SettingsModal({ onClose }: SettingsModalProps) {
+  const { 
+    bg, setBg, 
+    tintValue, setTintValue, 
+    grainOpacity, setGrainOpacity,
+    blurPx, setBlurPx,
+    borderRadiusPx, setBorderRadiusPx,
+    dashboardLayout, setDashboardLayout
+  } = useSettings();
+
+  const [localLayout, setLocalLayout] = useState(dashboardLayout);
+
+  const handleVisibilityChange = (id: string, isVisible: boolean) => {
+    setLocalLayout(prev => ({
+      ...prev,
+      visible: {
+        ...prev.visible,
+        [id]: isVisible,
+      }
+    }));
+  };
   
   const handleSave = async () => {
     const toastId = toast.loading('Ayarlar kaydediliyor...');
@@ -34,6 +43,8 @@ export default function SettingsModal({
       toast.error("Ayarları kaydetmek için giriş yapmalısınız.", { id: toastId });
       return;
     }
+
+    setDashboardLayout(localLayout);
 
     const { error } = await supabase
       .from("user_settings")
@@ -45,10 +56,11 @@ export default function SettingsModal({
           glass_blur_px: blurPx,
           glass_border_radius_px: borderRadiusPx,
         },{ onConflict: 'user_id' });
-    if (error) { toast.error("Hata: " + error.message, { id: toastId });
-    } 
+        
+    if (error) { toast.error("Hata: " + error.message, { id: toastId }); } 
     else { toast.success("Ayarlar başarıyla kaydedildi!", { id: toastId }); onClose(); }
   };
+  
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800/80 backdrop-blur-xl border border-white/20 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] overflow-y-auto">
@@ -57,7 +69,7 @@ export default function SettingsModal({
         <div className="mb-6">
           <h3 className="font-semibold mb-2">Arkaplan Seçimi</h3>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
-            {backgroundImages.map((img) => (
+             {backgroundImages.map((img) => (
               <Image
                 key={img}
                 src={img}
@@ -73,28 +85,19 @@ export default function SettingsModal({
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
             <div>
-                 <label htmlFor="tintValue" className="font-semibold mb-2 block">
-                    Kart Rengi (Siyah ← 0 → Beyaz): {tintValue}
-                </label>
-                <input id="tintValue" type="range" min="-50" max="50" step="5" value={tintValue} onChange={(e) => setTintValue(Number(e.target.value))} className="w-full h-2 bg-gradient-to-r from-gray-800 via-gray-500 to-gray-200 rounded-lg appearance-none cursor-pointer" />
+                 <label htmlFor="tintValue" className="font-semibold mb-2 block">Kart Rengi (Siyah ← 0 → Beyaz): {tintValue}</label>
+                 <input id="tintValue" type="range" min="-50" max="50" step="5" value={tintValue} onChange={(e) => setTintValue(Number(e.target.value))} className="w-full h-2 bg-gradient-to-r from-gray-800 via-gray-500 to-gray-200 rounded-lg appearance-none cursor-pointer" />
             </div>
-            
             <div>
-                <label htmlFor="grain" className="font-semibold mb-2 block">
-                    Gren Efekti Yoğunluğu: {grainOpacity}
-                </label>
+                <label htmlFor="grain" className="font-semibold mb-2 block">Gren Efekti Yoğunluğu: {grainOpacity}</label>
                 <input id="grain" type="range" min="0" max="50" step="5" value={grainOpacity} onChange={(e) => setGrainOpacity(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
             </div>
             <div>
-                <label htmlFor="blur" className="font-semibold mb-2 block">
-                    Bulanıklık: {blurPx}px
-                </label>
+                <label htmlFor="blur" className="font-semibold mb-2 block">Bulanıklık: {blurPx}px</label>
                  <input id="blur" type="range" min="0" max="40" step="1" value={blurPx} onChange={(e) => setBlurPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
             </div>
             <div>
-                <label htmlFor="borderRadius" className="font-semibold mb-2 block">
-                    Köşe Yumuşaklığı: {borderRadiusPx}px
-                 </label>
+                 <label htmlFor="borderRadius" className="font-semibold mb-2 block">Köşe Yumuşaklığı: {borderRadiusPx}px</label>
                 <input id="borderRadius" type="range" min="0" max="32" step="1" value={borderRadiusPx} onChange={(e) => setBorderRadiusPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
             </div>
         </div>
@@ -102,15 +105,32 @@ export default function SettingsModal({
         <div className="mt-6 border-t border-white/10 pt-4">
             <h3 className="font-semibold mb-3 text-center">Önizleme</h3>
             <div className="p-8 rounded-lg bg-cover bg-center transition-all duration-300" style={{ backgroundImage: `url(${bg})` }}>
-                <GlassCard 
-                    tintValue={tintValue} 
-                    grainOpacity={grainOpacity}
-                    blurPx={blurPx}
-                    borderRadiusPx={borderRadiusPx}
-                >
+                <GlassCard tintValue={tintValue} grainOpacity={grainOpacity} blurPx={blurPx} borderRadiusPx={borderRadiusPx}>
                     <h4 className="font-bold text-lg text-white">Örnek Kart</h4>
                     <p className="text-sm text-gray-200">Ayarlarınız burada anlık olarak gösterilir.</p>
                 </GlassCard>
+            </div>
+        </div>
+        
+        <div className="mt-6 border-t border-white/10 pt-4">
+            <h3 className="font-semibold mb-2">Dashboard Widget ları</h3>
+            <div className="grid grid-cols-1 gap-4">
+                {ALL_WIDGETS.map((widget: WidgetDefinition) => (
+                    <div key={widget.id} className="p-3 bg-white/5 rounded-md">
+                        <label className="flex items-center gap-3">
+                            <input 
+                                type="checkbox"
+                                checked={localLayout.visible[widget.id] ?? true}
+                                onChange={(e) => handleVisibilityChange(widget.id, e.target.checked)}
+                                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                            />
+                            <div>
+                                <span className="font-medium">{widget.name}</span>
+                                <p className="text-xs text-gray-400">{widget.description}</p>
+                            </div>
+                        </label>
+                    </div>
+                ))}
             </div>
         </div>
 

@@ -2,30 +2,20 @@
 
 import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
-import SettingsModal from '@/components/SettingsModal'; // GÜNCELLENDİ: Modal buraya import edildi
+import SettingsModal from '@/components/SettingsModal';
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import { Menu } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
-import { useRouter } from 'next/navigation'; // GÜNCELLENDİ: Yönlendirme için import edildi
+import { useRouter } from 'next/navigation';
 
 function DashboardContainer({ children }: { children: React.ReactNode }) {
-  // GÜNCELLENDİ: Ayarlar modalı ve logout için gerekli her şey context'ten ve hook'lardan alınıyor
-  const { 
-    supabase, 
-    bg, 
-    // Ayarlar modalına props olarak vermek için tüm state'ler ve setter'lar
-    tintValue, setTintValue, 
-    grainOpacity, setGrainOpacity, 
-    blurPx, setBlurPx, 
-    borderRadiusPx, setBorderRadiusPx, 
-    setBg 
-  } = useSettings();
-  
+  const { supabase, bg } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false); // Ayarlar modalının state'i buraya taşındı
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const router = useRouter();
 
-  // Çıkış yapma fonksiyonu buraya taşındı
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/');
@@ -54,7 +44,6 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* GÜNCELLENDİ: Butonlar ve Modal JSX'i layout'a taşındı */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
         <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border border-white/20 shadow-md transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
@@ -65,20 +54,12 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
       </div>
 
       {settingsOpen && (
-        <SettingsModal
-          onClose={() => setSettingsOpen(false)}
-          bg={bg} setBg={setBg}
-          tintValue={tintValue} setTintValue={setTintValue}
-          grainOpacity={grainOpacity} setGrainOpacity={setGrainOpacity}
-          blurPx={blurPx} setBlurPx={setBlurPx}
-          borderRadiusPx={borderRadiusPx} setBorderRadiusPx={setBorderRadiusPx}
-        />
+       <SettingsModal onClose={() => setSettingsOpen(false)} />
       )}
     </div>
   );
 }
 
-// Ana Layout, sadece Provider'ı sağlar
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SettingsProvider>

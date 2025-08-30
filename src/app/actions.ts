@@ -5,6 +5,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+type GridLayoutItem = {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  maxW?: number;
+  minH?: number;
+  maxH?: number;
+  static?: boolean;
+  isDraggable?: boolean;
+  isResizable?: boolean;
+};
 // Tipleri tanımlayalım
 type HistoryEntry = {
   action: string;
@@ -12,7 +26,10 @@ type HistoryEntry = {
   timestamp: string;
   notes: string;
 };
-
+export type DashboardLayoutSettings = {
+  layouts: { [breakpoint: string]: GridLayoutItem[] };
+  visible: Record<string, boolean>;
+};
 export type LoginState = {
   message: string | null;
 };
@@ -82,12 +99,14 @@ export async function addPersonnel(formData: FormData) {
     .select('value')
     .eq('key', 'default_annual_leave_days')
     .single();
+
   if (settingError) {
     return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
   }
   const defaultLeaveDays = Number(setting.value);
 
   const rawFormData = {
+    // Mevcut Alanlar
     full_name: formData.get('full_name') as string,
     tc_kimlik_no: formData.get('tc_kimlik_no') as string,
     email: formData.get('email') as string,
@@ -115,7 +134,20 @@ export async function addPersonnel(formData: FormData) {
     dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
+
+    // YENİ EKLENEN ALANLAR
+    department: formData.get('department') as string,
+    job_title: formData.get('job_title') as string,
+    employment_type: formData.get('employment_type') as string,
+    sgk_number: formData.get('sgk_number') as string,
+    is_active: formData.get('is_active') === 'on', // Checkbox değeri 'on' veya null gelir
+    bank_name: formData.get('bank_name') as string,
+    emergency_contact_name: formData.get('emergency_contact_name') as string,
+    emergency_contact_phone: formData.get('emergency_contact_phone') as string,
+    private_health_insurance_company: formData.get('private_health_insurance_company') as string,
+    private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
+
   if (!rawFormData.full_name || !rawFormData.tc_kimlik_no) {
     return { success: false, message: 'Ad Soyad ve T.C. Kimlik Numarası zorunludur.' };
   }
@@ -133,6 +165,7 @@ export async function addPersonnel(formData: FormData) {
   revalidatePath('/dashboard/personnel');
   return { success: true, message: 'Personel başarıyla eklendi.' };
 }
+
 
 export async function deletePersonnel(personnelId: number) {
   const supabase = createClient();
@@ -154,11 +187,13 @@ export async function deletePersonnel(personnelId: number) {
 export async function updatePersonnel(formData: FormData) {
   const supabase = createClient();
   const id = Number(formData.get('id'));
+
   if (!id) {
     return { success: false, message: 'Personel ID bulunamadı.' };
   }
 
   const rawFormData = {
+    // Mevcut Alanlar
     full_name: formData.get('full_name') as string,
     tc_kimlik_no: formData.get('tc_kimlik_no') as string,
     email: formData.get('email') as string,
@@ -173,7 +208,6 @@ export async function updatePersonnel(formData: FormData) {
     number_of_children: Number(formData.get('number_of_children')),
     agi_yüzdesi: formData.get('agi_yüzdesi') as string,
     engel_derecesi: formData.get('engel_derecesi') as string,
- 
     address: formData.get('address') as string,
     phone_number: formData.get('phone_number') as string,
     education_level: formData.get('education_level') as string,
@@ -186,11 +220,25 @@ export async function updatePersonnel(formData: FormData) {
     dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
+
+    // YENİ EKLENEN ALANLAR
+    department: formData.get('department') as string,
+    job_title: formData.get('job_title') as string,
+    employment_type: formData.get('employment_type') as string,
+    sgk_number: formData.get('sgk_number') as string,
+    is_active: formData.get('is_active') === 'on',
+    bank_name: formData.get('bank_name') as string,
+    emergency_contact_name: formData.get('emergency_contact_name') as string,
+    emergency_contact_phone: formData.get('emergency_contact_phone') as string,
+    private_health_insurance_company: formData.get('private_health_insurance_company') as string,
+    private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
+
   const { error } = await supabase
     .from('personnel')
     .update(rawFormData)
     .eq('id', id);
+
   if (error) {
     console.error("Personel güncelleme hatası:", error);
     if (error.code === '23505') {
@@ -447,7 +495,6 @@ export async function updateSystemSettings(formData: FormData) {
     return { success: false, message };
   }
 }
-// src/app/actions.ts DOSYASININ SONUNA EKLEYİN
 
 export async function createUser(formData: FormData) {
   const adminSupabase = createAdminClient();
@@ -539,4 +586,29 @@ export async function getUserProfiles() {
   }
   
   return { data, error };
+}
+
+// YENİ: Dashboard düzenini kaydetmek için server action
+export async function updateUserDashboardLayout(layout: DashboardLayoutSettings) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, message: 'Kullanıcı bulunamadı.' };
+  }
+
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({
+      user_id: user.id,
+      dashboard_layout: layout,
+    }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.error("Dashboard layout güncelleme hatası:", error);
+    return { success: false, message: 'Layout güncellenemedi.' };
+  }
+
+  revalidatePath('/dashboard');
+  return { success: true };
 }

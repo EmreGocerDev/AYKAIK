@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, FormEvent } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { addPersonnel } from '@/app/actions';
@@ -47,32 +46,27 @@ export default function AddPersonnelModal({ onClose, onPersonnelAdded }: ModalPr
   };
 
   const inputClass = "w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none";
-
+  
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <GlassCard
-        tintValue={tintValue}
-        blurPx={blurPx}
-        borderRadiusPx={borderRadiusPx}
-        grainOpacity={grainOpacity}
+        tintValue={tintValue} blurPx={blurPx} borderRadiusPx={borderRadiusPx} grainOpacity={grainOpacity}
         className="w-full max-w-4xl max-h-[90vh] flex flex-col"
       >
         <div className="flex justify-between items-center mb-6 flex-shrink-0">
           <h2 className="text-2xl font-bold">Yeni Personel Ekle</h2>
-          <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+           <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors"> 
             <X size={24} />
           </button>
         </div>
         
-        {/* DÜZELTME: className'e 'flex-1' eklendi */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 -mr-2">
+        <form onSubmit={handleSubmit} className="overflow-y-auto pr-2 -mr-2" style={{ height: '65vh' }}>
           <div className="space-y-6">
-
             <fieldset>
               <legend className="text-lg font-semibold mb-2 text-white/80">Kişisel Bilgiler</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <input name="full_name" required placeholder="Adı Soyadı" className={inputClass} />
-                <input name="tc_kimlik_no" required maxLength={11} placeholder="TC Kimlik Numarası" className={inputClass} />
+                <input name="full_name" required placeholder="Adı Soyadı *" className={inputClass} />
+                <input name="tc_kimlik_no" required maxLength={11} placeholder="TC Kimlik Numarası *" className={inputClass} />
                 <input name="father_name" placeholder="Baba Adı" className={inputClass} />
                 <div>
                     <label className="text-sm text-gray-400 mb-1 block">Doğum Tarihi</label>
@@ -98,26 +92,34 @@ export default function AddPersonnelModal({ onClose, onPersonnelAdded }: ModalPr
 
             <fieldset>
               <legend className="text-lg font-semibold mb-2 text-white/80">İletişim Bilgileri</legend>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <input name="phone_number" placeholder="Şahsi Tel No" className={inputClass} />
                 <input name="email" type="email" placeholder="E-posta Adresi" className={inputClass} />
-                <textarea name="address" placeholder="Adres" className={inputClass} rows={2}></textarea>
-                <input name="iban" placeholder="IBAN" className={inputClass} />
+                <textarea name="address" placeholder="Adres" className={`${inputClass} md:col-span-2 lg:col-span-3`} rows={2}></textarea>
               </div>
             </fieldset>
 
             <fieldset>
-              <legend className="text-lg font-semibold mb-2 text-white/80">İstihdam ve Eğitim</legend>
+               <legend className="text-lg font-semibold mb-2 text-white/80">İstihdam ve Eğitim</legend>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <select name="region_id" required className={inputClass}>
-                  <option value="">Bölge Seçin...</option>
+                  <option value="">Bölge Seçin *</option>
                   {regions.map(region => (<option key={region.id} value={region.id}>{region.name}</option>))}
                 </select>
                 <input name="şube" placeholder="Şube" className={inputClass} />
                 <div>
-                    <label className="text-sm text-gray-400 mb-1 block">İşe Giriş Tarihi</label>
+                    <label className="text-sm text-gray-400 mb-1 block">İşe Giriş Tarihi *</label>
                     <input name="start_date" type="date" required className={`${inputClass} [color-scheme:dark]`} />
                 </div>
+                <input name="department" placeholder="Departman" className={inputClass} />
+                <input name="job_title" placeholder="Görev Ünvanı" className={inputClass} />
+                <select name="employment_type" className={inputClass}>
+                    <option value="">Çalışma Şekli...</option>
+                    <option value="Tam Zamanlı">Tam Zamanlı</option>
+                    <option value="Yarı Zamanlı">Yarı Zamanlı</option>
+                    <option value="Sözleşmeli">Sözleşmeli</option>
+                    <option value="Stajyer">Stajyer</option>
+                </select>
                 <input name="education_level" placeholder="Mezuniyet (Eğitim Seviyesi)" className={inputClass} />
                 <input name="bölüm" placeholder="Mezun Olduğu Bölüm" className={inputClass} />
                 <select name="military_service_status" className={inputClass}>
@@ -131,7 +133,30 @@ export default function AddPersonnelModal({ onClose, onPersonnelAdded }: ModalPr
                     <label className="text-sm text-gray-400 mb-1 block">Sözleşme Tarihi</label>
                     <input name="sözleşme_tarihi" type="date" className={`${inputClass} [color-scheme:dark]`} />
                 </div>
+                 <div className="flex items-center gap-2 pt-5">
+                    <input id="is_active" name="is_active" type="checkbox" defaultChecked className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"/>
+                    <label htmlFor="is_active" className="text-sm font-medium">Personel Aktif</label>
+                </div>
               </div>
+            </fieldset>
+            
+            <fieldset>
+                <legend className="text-lg font-semibold mb-2 text-white/80">Acil Durum &amp; Sağlık Bilgileri</legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input name="emergency_contact_name" placeholder="Acil Durum Kişisi Adı" className={inputClass} />
+                    <input name="emergency_contact_phone" placeholder="Acil Durum Kişisi Telefonu" className={inputClass} />
+                    <input name="private_health_insurance_company" placeholder="Özel Sağlık Sigortası Şirketi" className={inputClass} />
+                    <input name="private_health_insurance_policy_number" placeholder="Poliçe Numarası" className={inputClass} />
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend className="text-lg font-semibold mb-2 text-white/80">Finansal Bilgiler</legend>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input name="sgk_number" placeholder="SGK Sicil No" className={inputClass} />
+                    <input name="bank_name" placeholder="Banka Adı" className={inputClass} />
+                    <input name="iban" placeholder="IBAN" className={`${inputClass} md:col-span-2`} />
+                </div>
             </fieldset>
 
             <fieldset>
@@ -145,7 +170,6 @@ export default function AddPersonnelModal({ onClose, onPersonnelAdded }: ModalPr
                 </div>
               </div>
             </fieldset>
-            
           </div>
           
           <div className="flex justify-end mt-8 pt-6 border-t border-white/10 flex-shrink-0">
