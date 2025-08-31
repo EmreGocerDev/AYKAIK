@@ -75,7 +75,7 @@ export default function CalendarPage() {
       const leaveEvents: CalendarEvent[] = (requestsRes.data as LeaveRequest[]).map(req => ({
         title: req.personnel_full_name,
         start: req.start_date,
-        end: new Date(new Date(req.end_date).setDate(new Date(req.end_date).getDate() + 1)).toISOString().split('T')[0],
+        end: new Date(new Date(req.end_date.replace(/-/g, '/')).setDate(new Date(req.end_date.replace(/-/g, '/')).getDate() + 1)).toISOString().split('T')[0],
         display: 'background',
         backgroundColor: 'rgba(239, 68, 68, 0.4)',
         borderColor: 'transparent',

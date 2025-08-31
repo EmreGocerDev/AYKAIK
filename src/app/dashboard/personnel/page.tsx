@@ -172,7 +172,7 @@ export default function PersonnelPage() {
                                 <DetailRow label="Departman" value={person.department} />
                                 <DetailRow label="Çalışma Şekli" value={person.employment_type} />
                                 <DetailRow label="SGK Sicil No" value={person.sgk_number} />
-                                <DetailRow label="Doğum Tarihi" value={person.date_of_birth ? new Date(person.date_of_birth).toLocaleDateString('tr-TR') : null} />
+                                <DetailRow label="Doğum Tarihi" value={person.date_of_birth ? new Date(person.date_of_birth.replace(/-/g, '/')).toLocaleDateString('tr-TR') : null} />
                                 <DetailRow label="Medeni Hal" value={person.marital_status} />
                                 <DetailRow label="Acil Durum Kişisi" value={person.emergency_contact_name} />
                                 <DetailRow label="Acil Durum Tel" value={person.emergency_contact_phone} />

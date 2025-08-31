@@ -49,11 +49,12 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
   const formatDateForInput = (dateString?: string | null) => {
     if (!dateString) return '';
     try {
-        return new Date(dateString).toISOString().split('T')[0];
+        // GÜNCELLENDİ: '-' yerine '/' kullanıldı
+        return new Date(dateString.replace(/-/g, '/')).toISOString().split('T')[0];
     } catch  {
         return '';
     }
-  }
+}
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">

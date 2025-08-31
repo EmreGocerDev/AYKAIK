@@ -7,7 +7,12 @@ import toast from 'react-hot-toast';
 import type { LeaveRequest } from '@/app/dashboard/requests/page';
 import { useSettings } from '@/contexts/SettingsContext';
 import { calculateWorkingDays } from '@/lib/utils';
-
+// YENİ: Güvenli tarih formatlama fonksiyonu
+const safeLocaleDate = (dateString: string) => {
+    if (!dateString) return '';
+    // '2025-08-31' formatını '2025/08/31' formatına çevirerek hatayı önle
+    return new Date(dateString.replace(/-/g, '/')).toLocaleDateString('tr-TR');
+}
 type ModalProps = {
   request: LeaveRequest;
   onClose: () => void;
@@ -63,7 +68,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     event.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-    const originalDates = `${new Date(request.start_date).toLocaleDateString('tr-TR')} - ${new Date(request.end_date).toLocaleDateString('tr-TR')}`;
+   const originalDates = `${safeLocaleDate(request.start_date)} - ${safeLocaleDate(request.end_date)}`;
     formData.append('original_dates', originalDates);
     
     const result = await updateLeaveRequestDates(formData);
@@ -126,8 +131,8 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                     <p className="text-sm text-gray-400">İzin Tarihleri</p>
                     <div className="flex items-center gap-2 flex-wrap">
                        <p className="font-semibold text-lg">
-                        {new Date(request.start_date).toLocaleDateString('tr-TR')} - {new Date(request.end_date).toLocaleDateString('tr-TR')}
-                      </p>
+    {safeLocaleDate(request.start_date)} - {safeLocaleDate(request.end_date)}
+</p>
                       {workingDays !== null && (
                          <span className="text-sm text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
                           {workingDays} iş günü
@@ -149,7 +154,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
               <div key={index} className="border-l-2 pl-4 border-gray-600">
                 <p className="font-semibold">{log.action} <span className="text-sm font-normal text-gray-400">- {log.actor}</span></p>
                 <p className="text-sm text-gray-300 italic">&quot;{log.notes}&quot;</p>
-                <p className="text-xs text-gray-500 mt-1">{new Date(log.timestamp).toLocaleString('tr-TR')}</p>
+                <p className="text-xs text-gray-500 mt-1">{new Date(log.timestamp.replace(/-/g, '/')).toLocaleString('tr-TR')}</p>
               </div>
             ))}
           </div>
