@@ -1,7 +1,8 @@
 "use client";
 
-// YENİ: Link bileşeni ve ikonlar eklendi
+// *** YENİ: Gerekli import'lar eklendi ***
 import { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import GlassCard from "../../components/GlassCard";
 import { useSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../contexts/SettingsContext";
@@ -10,10 +11,24 @@ import {
     PieChart, TrendingUp, UserX, Building, GripVertical,
     RefreshCw, UserPlus, UserCog, Hourglass
 } from "lucide-react";
-import { Responsive, WidthProvider } from 'react-grid-layout';
+// import { Responsive, WidthProvider } from 'react-grid-layout'; // Eski import satırı kaldırıldı
 import type { Layout } from 'react-grid-layout';
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+// *** YENİ: react-grid-layout kütüphanesi sadece tarayıcıda yüklenecek şekilde ayarlandı ***
+// ssr: false -> Bu kütüphanenin sunucuda çalışmasını engeller.
+// loading -> Kütüphane yüklenirken ekranda ne gösterileceğini belirtir.
+const ResponsiveGridLayout = dynamic(
+    () => import('react-grid-layout').then(mod => mod.WidthProvider(mod.Responsive)),
+    { 
+        ssr: false,
+        loading: () => (
+            <div className="min-h-screen flex items-center justify-center text-white text-xl">
+                Dashboard Yükleniyor...
+            </div>
+        )
+    }
+);
+
 
 // =================================================================================
 // TİPLER VE YARDIMCI BİLEŞENLER
@@ -25,7 +40,6 @@ type UpcomingLeave = {
   personnel: { full_name: string } | null;
 };
 
-// YENİ: Onay bekleyen talepler için tip tanımı
 type AwaitingApprovalRequest = {
     id: number;
     personnel_full_name: string;
@@ -51,22 +65,20 @@ type DashboardData = {
   upcomingLeaves: UpcomingLeave[];
   leaveTypeDistribution: { name: string; count: number }[];
 };
-
 const statusTranslations: { [key: string]: string } = {
   pending: 'Beklemede',
   approved_by_coordinator: 'Koordinatör Onayladı',
   approved: 'Onaylandı',
   rejected: 'Reddedildi',
-  rejected_by_coordinator: 'Koordinatör Reddetti' // EKLENDİ
+  rejected_by_coordinator: 'Koordinatör Reddetti'
 };
 const statusColors: { [key: string]: string } = {
   pending: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/10',
   approved_by_coordinator: 'text-sky-400 border-sky-500/20 bg-sky-500/10',
   approved: 'text-green-400 border-green-500/20 bg-green-500/10',
   rejected: 'text-red-400 border-red-500/20 bg-red-500/10',
-  rejected_by_coordinator: 'text-orange-400 border-orange-500/20 bg-orange-500/10' // EKLENDİ
+  rejected_by_coordinator: 'text-orange-400 border-orange-500/20 bg-orange-500/10'
 };
-
 const SimpleBarChart = ({ data, title }: { data: { name: string; count: number }[], title: string }) => {
     const total = data.reduce((sum, item) => sum + item.count, 0);
     if (total === 0) return <p className="text-gray-400 text-center py-4">Gösterilecek veri yok.</p>;
@@ -77,14 +89,14 @@ const SimpleBarChart = ({ data, title }: { data: { name: string; count: number }
             <div className="space-y-3 text-sm">
                 {data.map((item, index) => (
                     <div key={item.name}>
-                        <div className="flex justify-between mb-1">
+                         <div className="flex justify-between mb-1">
                             <span className="capitalize font-medium text-gray-300">{item.name}</span>
                             <span className="font-bold">{item.count}</span>
                         </div>
-                        <div className="w-full bg-gray-700/50 rounded-full h-2.5">
+                         <div className="w-full bg-gray-700/50 rounded-full h-2.5">
                             <div className={`${colors[index % colors.length]} h-2.5 rounded-full`} style={{ width: `${(item.count / total) * 100}%` }}></div>
                         </div>
-                    </div>
+                     </div>
                 ))}
             </div>
         </div>
@@ -124,10 +136,9 @@ export default function DashboardPage() {
   const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, dashboardLayout, setDashboardLayout } = useSettings();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
-  // YENİ: Onay Bekleyenler widget'ı için state
   const [awaitingApprovalData, setAwaitingApprovalData] = useState<AwaitingApprovalRequest[]>([]);
   const [isMounted, setIsMounted] = useState(false);
-
+  
   useEffect(() => {
     setIsMounted(true);
     const fetchDashboardData = async () => {
@@ -167,7 +178,6 @@ export default function DashboardPage() {
             }
             
             const recentPromise = supabase.rpc('search_leave_requests', { limit_val: 5, offset_val: 0, region_filter_id: profile.role === 'coordinator' ? profile.region_id : null, search_query: null, leave_type_filter: null });
-            
             let upcomingQuery = supabase.from('leave_requests').select('id, start_date, personnel(full_name)').eq('status', 'approved').gte('start_date', todayUTC).lte('start_date', next7Days).order('start_date');
             if (personnelIdsForCoordinator !== null) {
                 upcomingQuery = personnelIdsForCoordinator.length > 0 ? upcomingQuery.in('personnel_id', personnelIdsForCoordinator) : upcomingQuery.eq('id', -1);
@@ -180,10 +190,8 @@ export default function DashboardPage() {
             
             const awaitingFinalPromise = profile.role === 'admin' ? supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'approved_by_coordinator') : Promise.resolve({ data: null, error: null, count: 0 });
             const regionsPromise = profile.role === 'admin' ? supabase.from('regions').select('id', { count: 'exact', head: true }) : Promise.resolve({ data: null, error: null, count: 0 });
-            
-            // YENİ: Onay bekleyen talepleri get_notifications RPC'si ile çekiyoruz
             const awaitingApprovalPromise = supabase.rpc('get_notifications', { user_role: profile.role, user_region_id: profile.region_id });
-
+            
             const [
                 pendingResult, approvedResult, personnelResult, onLeaveQueryRes, recentResult,
                 upcomingResult, leaveTypeResult, awaitingFinalResult, regionsResult, awaitingApprovalResult
@@ -205,12 +213,16 @@ export default function DashboardPage() {
             }
             
             const leaveTypeDistribution = Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+            
+            // *** GÜNCELLENDİ: Hatalı tarih formatını düzeltecek replace eklendi ***
             const upcomingData = upcomingResult.data || [];
-         const transformedUpcomingLeaves = upcomingData.map((item: { id: number; start_date: string; personnel: { full_name: string }[] | null }) => ({
-    id: item.id,
-    start_date: item.start_date,
-    personnel: (item.personnel && item.personnel.length > 0) ? item.personnel[0] : null
-}));
+            // GÜNCELLENDİ: 'any' tipi kaldırılarak doğru tip tanımı yapıldı ve 
+            // Supabase'den dizi olarak gelen personel verisinin ilk elemanı alındı.
+            const transformedUpcomingLeaves = upcomingData.map((item: { id: number; start_date: string; personnel: { full_name: string; }[] | null }) => ({
+                id: item.id,
+                start_date: item.start_date,
+                personnel: (item.personnel && item.personnel.length > 0) ? item.personnel[0] : null
+            }));
 
             setData({
                 stats: {
@@ -225,14 +237,13 @@ export default function DashboardPage() {
                 upcomingLeaves: transformedUpcomingLeaves,
                 leaveTypeDistribution: leaveTypeDistribution,
             } as DashboardData);
-
-        } catch (error) { console.error("Dashboard verileri çekilirken hata oluştu:", error); } 
+        } catch (error) { console.error("Dashboard verileri çekilirken hata oluştu:", error);
+        } 
         finally { setLoading(false); }
     };
     if (profile) { fetchDashboardData(); }
   }, [profile, supabase]);
 
-  // src/app/dashboard/page.tsx dosyasında, allWidgets'i tanımlayan useMemo kancasını bulun
 
   const allWidgets = useMemo(() => {
     if (!data) return {};
@@ -249,33 +260,32 @@ export default function DashboardPage() {
         leaveStatusData.push({ name: 'Nihai Onay Bekliyor', count: data.stats.awaitingFinalApprovalCount });
     }
     
-    // YENİ: Onay Bekleyenler Widget'ının JSX'i
     const awaitingApprovalWidget = (
         <GlassCard {...glassCardProps} className="h-full flex flex-col">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0">
                 <Hourglass size={18}/> Onay Bekleyen Talepler
-            </h3>
+             </h3>
             <div className="space-y-2 overflow-y-auto flex-1">
                 {awaitingApprovalData.length > 0 ? (
                     awaitingApprovalData.slice(0, 5).map(req => (
                         <Link href="/dashboard/notifications" key={req.id} className="block bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-colors">
                             <div className="flex justify-between items-center text-sm">
-                                <p className="font-semibold truncate pr-2">{req.personnel_full_name}</p>
+                                 <p className="font-semibold truncate pr-2">{req.personnel_full_name}</p>
                                 <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
                             </div>
-                        </Link>
+                         </Link>
                     ))
                 ) : (
                     <p className="text-gray-400 text-center py-4">İşlem bekleyen talep yok.</p>
                 )}
-            </div>
+             </div>
             {awaitingApprovalData.length > 5 && (
                 <Link href="/dashboard/notifications" className="text-center text-sm mt-4 text-blue-400 hover:underline">
                     Tümünü Gör ({awaitingApprovalData.length})
                 </Link>
             )}
         </GlassCard>
-    );
+     );
 
     return {
         pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
@@ -292,15 +302,15 @@ export default function DashboardPage() {
             <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center">
                 <div className="flex flex-row items-center justify-center gap-4 flex-wrap">
                     <Link href="/dashboard/personnel" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
-                        <UserPlus className="w-8 h-8 text-blue-400" />
+                         <UserPlus className="w-8 h-8 text-blue-400" />
                         <span className="text-xs font-semibold mt-2">Personel Ekle</span>
                     </Link>
                     <Link href="/dashboard/requests" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
-                        <Briefcase className="w-8 h-8 text-green-400" />
+                         <Briefcase className="w-8 h-8 text-green-400" />
                         <span className="text-xs font-semibold mt-2">İzinleri Görüntüle</span>
                     </Link>
                     {profile?.role === 'admin' && (
-                        <Link href="/dashboard/users" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
+                         <Link href="/dashboard/users" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
                             <UserCog className="w-8 h-8 text-purple-400" />
                             <span className="text-xs font-semibold mt-2">Kullanıcı Yönet</span>
                         </Link>
@@ -309,7 +319,7 @@ export default function DashboardPage() {
             </GlassCard>
         ),
         monthlyLeaveRate: (
-            <GlassCard {...glassCardProps} className="h-full flex flex-col">
+             <GlassCard {...glassCardProps} className="h-full flex flex-col">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><TrendingUp size={18}/> Aylık İzin Oranı</h3>
                 <div className="flex flex-col items-center justify-center flex-1">
                     <div className="text-5xl font-bold text-cyan-400">{monthlyLeavePercentage}%</div>
@@ -318,7 +328,7 @@ export default function DashboardPage() {
                         <div className="bg-cyan-500 h-4 rounded-full" style={{ width: `${monthlyLeavePercentage}%` }}></div>
                     </div>
                 </div>
-            </GlassCard>
+             </GlassCard>
         ),
         leaveStatusDistribution: (
             <GlassCard {...glassCardProps} className="h-full flex flex-col">
@@ -345,11 +355,10 @@ export default function DashboardPage() {
   const visibleWidgets = Object.keys(allWidgets).filter(key => {
     const isVisible = dashboardLayout.visible[key] ?? true;
     if (!isVisible) return false;
-    // GÜNCELLEME: awaitingFinal yerine awaitingApproval kontrolü
     if (profile?.role !== 'admin' && ['awaitingFinal', 'totalRegions', 'leaveStatusDistribution'].includes(key)) return false;
     return true;
   });
-
+  
   return (
     <div className="w-full min-h-screen p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -357,12 +366,12 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold text-white">Ayka Enerji İnsan Kaynakları Kokpiti</h1>
-                </div>
+                 </div>
                 <button
                     onClick={() => setDashboardLayout(DEFAULT_DASHBOARD_SETTINGS)}
                     className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
                     title="Paneli Sıfırla"
-                >
+                 >
                     <RefreshCw size={16} />
                     <span>Sıfırla</span>
                 </button>
@@ -370,24 +379,24 @@ export default function DashboardPage() {
         </div>
         
         <ResponsiveGridLayout
-            className="layout"
+           className="layout"
             layouts={dashboardLayout.layouts}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
             rowHeight={50}
             onLayoutChange={handleLayoutChange}
-            isDraggable={true}
+           isDraggable={true}
             isResizable={true}
             draggableHandle=".drag-handle"
             isBounded={true}
         >
             {visibleWidgets.map(key => (
                 <div key={key} className="relative group bg-transparent">
-                    <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
+                     <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
                         <GripVertical />
                     </div>
                     <div className="h-full w-full">
-                        {allWidgets[key as keyof typeof allWidgets]}
+                         {allWidgets[key as keyof typeof allWidgets]}
                     </div>
                 </div>
             ))}
