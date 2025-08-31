@@ -8,13 +8,11 @@ import { Bell, Check, ThumbsDown, Hourglass } from 'lucide-react';
 import type { LeaveRequest } from '../requests/page';
 
 type Notification = Omit<LeaveRequest, 'total_count'>;
-
 export default function NotificationsPage() {
   const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, setNotificationCount } = useSettings();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-
   const statusInfo: { [key: string]: { icon: React.ReactNode, color: string, text: string } } = {
     pending: { icon: <Hourglass size={16} />, color: "text-yellow-400", text: "Onay Bekliyor" },
     approved_by_coordinator: { icon: <Check size={16} />, color: "text-sky-400", text: "Koordinatör Onayladı" },
@@ -23,9 +21,7 @@ export default function NotificationsPage() {
 
   const fetchNotifications = useCallback(async () => {
     if (!profile) return;
-    // Veri çekilirken tekrar loading state'ini true yapmıyoruz ki arayüzde zıplama olmasın.
-    // Sadece ilk yüklemede true olacak.
-    // setLoading(true); 
+    
     const { data, error } = await supabase.rpc('get_notifications', {
         user_role: profile.role,
         user_region_id: profile.region_id
@@ -34,44 +30,51 @@ export default function NotificationsPage() {
     if (error) {
         console.error("Bildirimler çekilirken hata:", error);
     } else {
-        setNotifications(data as Notification[]);
+       setNotifications(data as Notification[]);
     }
-    setLoading(false); // Sadece ilk yükleme ve manuel refresh sonrası için.
-  }, [supabase, profile]);
+    // Only set loading to false after the first fetch attempt.
+    if(loading) setLoading(false);
+  }, [supabase, profile, loading]);
 
-  // İlk veri çekme işlemi
+  // Combined effect for fetching initial data and setting up realtime subscription.
+  // This ensures that whenever the user's profile changes, both the initial data
+  // is re-fetched and the realtime subscription is updated correctly.
   useEffect(() => {
+    if (!profile) {
+      setLoading(false); // Ensure loading state is turned off if no profile is found.
+      return;
+    }
+
+    // Fetch initial notifications for the current user profile.
     fetchNotifications();
-  }, [fetchNotifications]);
-  
-  // YENİ: Supabase Realtime ile anlık güncelleme
-  useEffect(() => {
-    if (!profile) return;
 
+    // Set up a realtime subscription to re-fetch when the underlying data changes.
     const channel = supabase
       .channel('realtime-notifications-page')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'leave_requests' },
         (payload) => {
-          // Gelen değişikliğin bu kullanıcıyı ilgilendirip ilgilendirmediğini kontrol et
-          // ve listeyi yeniden çek. Bu, en basit ve en güvenilir yöntemdir.
-          console.log('Yeni izin talebi değişikliği algılandı, liste güncelleniyor.', payload);
+          // A change occurred in leave requests, re-fetch the notifications
+          // to ensure the list is always up-to-date. The `get_notifications` RPC
+          // will handle the logic of what is relevant to the current user.
+          console.log('İzin taleplerinde değişiklik algılandı, liste güncelleniyor.', payload);
           fetchNotifications();
         }
       )
       .subscribe();
 
-    // Component DOM'dan kaldırıldığında channel aboneliğini bitir
+    // Clean up the subscription when the component unmounts or the profile changes.
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase, profile, fetchNotifications]);
 
+
   const handleModalClose = () => {
     setSelectedRequest(null);
-    fetchNotifications(); // Liste anlık güncellensin
-    // Sayacı da anlık güncelleyelim
+    fetchNotifications();
+    // Update the global counter immediately after an action.
     if(profile) {
         supabase.rpc('get_notification_count', {
             user_role: profile.role,
@@ -81,7 +84,7 @@ export default function NotificationsPage() {
   };
 
   const pageTitle = profile?.role === 'admin' ? "İşlem Bekleyen Talepler" : "Bölgenizdeki Onay Bekleyen Talepler";
-
+  
   return (
     <>
       <div className="p-4 md:p-8 text-white">

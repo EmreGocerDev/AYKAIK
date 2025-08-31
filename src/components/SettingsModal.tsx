@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import { useSettings, ALL_WIDGETS, type WidgetDefinition } from "@/contexts/SettingsContext";
 import { useState } from "react";
+import { PlayCircle } from "lucide-react";
 
 const supabase = createClient();
 const backgroundImages = Array.from({ length: 15 }, (_, i) => `/backgrounds/bg${i + 1}.jpg`);
@@ -13,7 +14,12 @@ const backgroundImages = Array.from({ length: 15 }, (_, i) => `/backgrounds/bg${
 type SettingsModalProps = {
   onClose: () => void;
 };
-
+const availableSounds = [
+    { name: 'Sessiz', url: 'none' },
+    { name: 'Bildirim Sesi 1 (Varsayılan)', url: '/sounds/notification1.mp3' },
+    { name: 'Bildirim Sesi 2', url: '/sounds/notification2.mp3' },
+    { name: 'Bildirim Sesi 3', url: '/sounds/notification3.mp3' },
+];
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const { 
     bg, setBg, 
@@ -21,11 +27,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     grainOpacity, setGrainOpacity,
     blurPx, setBlurPx,
     borderRadiusPx, setBorderRadiusPx,
-    dashboardLayout, setDashboardLayout
+    dashboardLayout, setDashboardLayout,
+    notificationSoundUrl, setNotificationSoundUrl 
   } = useSettings();
 
   const [localLayout, setLocalLayout] = useState(dashboardLayout);
-
+const playSound = (url: string) => {
+    if (url !== 'none') {
+        const audio = new Audio(url);
+        audio.play();
+    }
+  };
   const handleVisibilityChange = (id: string, isVisible: boolean) => {
     setLocalLayout(prev => ({
       ...prev,
@@ -34,6 +46,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         [id]: isVisible,
       }
     }));
+    
   };
   
   const handleSave = async () => {
@@ -55,6 +68,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           grain_opacity: grainOpacity,
           glass_blur_px: blurPx,
           glass_border_radius_px: borderRadiusPx,
+          notification_sound_url: notificationSoundUrl,
         },{ onConflict: 'user_id' });
         
     if (error) { toast.error("Hata: " + error.message, { id: toastId }); } 
@@ -111,7 +125,31 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 </GlassCard>
             </div>
         </div>
-        
+        <div className="mt-6 border-t border-white/10 pt-4">
+            <h3 className="font-semibold mb-2">Bildirim Sesi</h3>
+            <div className="space-y-2">
+                {availableSounds.map((sound) => (
+                    <label key={sound.url} className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer">
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="radio"
+                                name="notification-sound"
+                                value={sound.url}
+                                checked={notificationSoundUrl === sound.url}
+                                onChange={(e) => setNotificationSoundUrl(e.target.value)}
+                                className="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"
+                            />
+                            <span>{sound.name}</span>
+                        </div>
+                        {sound.url !== 'none' && (
+                             <button type="button" onClick={() => playSound(sound.url)} className="p-2 rounded-full hover:bg-white/10" title="Sesi Dinle">
+                                <PlayCircle size={20} />
+                            </button>
+                        )}
+                    </label>
+                ))}
+            </div>
+        </div>
         <div className="mt-6 border-t border-white/10 pt-4">
             <h3 className="font-semibold mb-2">Dashboard Widget ları</h3>
             <div className="grid grid-cols-1 gap-4">

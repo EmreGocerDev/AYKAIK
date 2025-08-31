@@ -99,7 +99,6 @@ export async function addPersonnel(formData: FormData) {
     .select('value')
     .eq('key', 'default_annual_leave_days')
     .single();
-
   if (settingError) {
     return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
   }
@@ -135,6 +134,7 @@ export async function addPersonnel(formData: FormData) {
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
 
+  
     // YENİ EKLENEN ALANLAR
     department: formData.get('department') as string,
     job_title: formData.get('job_title') as string,
@@ -147,7 +147,6 @@ export async function addPersonnel(formData: FormData) {
     private_health_insurance_company: formData.get('private_health_insurance_company') as string,
     private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
-
   if (!rawFormData.full_name || !rawFormData.tc_kimlik_no) {
     return { success: false, message: 'Ad Soyad ve T.C. Kimlik Numarası zorunludur.' };
   }
@@ -187,7 +186,6 @@ export async function deletePersonnel(personnelId: number) {
 export async function updatePersonnel(formData: FormData) {
   const supabase = createClient();
   const id = Number(formData.get('id'));
-
   if (!id) {
     return { success: false, message: 'Personel ID bulunamadı.' };
   }
@@ -207,6 +205,7 @@ export async function updatePersonnel(formData: FormData) {
     eş_gelir_durumu: formData.get('eş_gelir_durumu') as string,
     number_of_children: Number(formData.get('number_of_children')),
     agi_yüzdesi: formData.get('agi_yüzdesi') as string,
+  
     engel_derecesi: formData.get('engel_derecesi') as string,
     address: formData.get('address') as string,
     phone_number: formData.get('phone_number') as string,
@@ -222,6 +221,7 @@ export async function updatePersonnel(formData: FormData) {
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
 
     // YENİ EKLENEN ALANLAR
+    
     department: formData.get('department') as string,
     job_title: formData.get('job_title') as string,
     employment_type: formData.get('employment_type') as string,
@@ -233,12 +233,10 @@ export async function updatePersonnel(formData: FormData) {
     private_health_insurance_company: formData.get('private_health_insurance_company') as string,
     private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
-
   const { error } = await supabase
     .from('personnel')
     .update(rawFormData)
     .eq('id', id);
-
   if (error) {
     console.error("Personel güncelleme hatası:", error);
     if (error.code === '23505') {
@@ -503,7 +501,6 @@ export async function createUser(formData: FormData) {
   const password = formData.get('password') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
-
   if (!email || !password || !full_name || !region_id) {
     return { success: false, message: 'Tüm alanlar zorunludur.' };
   }
@@ -514,7 +511,6 @@ export async function createUser(formData: FormData) {
     password,
     email_confirm: true,
   });
-
   if (authError) {
     console.error("Auth kullanıcısı oluşturma hatası:", authError);
     return { success: false, message: `Kullanıcı oluşturulamadı: ${authError.message}` };
@@ -527,7 +523,6 @@ export async function createUser(formData: FormData) {
     region_id,
     role: 'coordinator',
   });
-
   if (profileError) {
     console.error("Profil oluşturma/güncelleme hatası:", profileError);
     await adminSupabase.auth.admin.deleteUser(authData.user.id);
@@ -538,21 +533,21 @@ export async function createUser(formData: FormData) {
   return { success: true, message: 'Koordinatör başarıyla oluşturuldu.' };
 }
 
+// *** SORUN ÇÖZÜMÜ BAŞLANGICI ***
+// Admin yetkisiyle çalışması için 'createAdminClient' kullanıldı.
 export async function updateUser(formData: FormData) {
-  const supabase = createClient();
+  const adminSupabase = createAdminClient(); // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
   const userId = formData.get('userId') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
-
   if (!userId || !full_name || !region_id) {
     return { success: false, message: 'Eksik bilgi.' };
   }
 
-  const { error } = await supabase
+  const { error } = await adminSupabase // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
     .from('profiles')
     .update({ full_name, region_id })
     .eq('id', userId);
-
   if (error) {
     console.error("Kullanıcı güncelleme hatası:", error);
     return { success: false, message: `Güncelleme hatası: ${error.message}` };
@@ -561,12 +556,12 @@ export async function updateUser(formData: FormData) {
   revalidatePath('/dashboard/users');
   return { success: true, message: 'Kullanıcı bilgileri güncellendi.' };
 }
+// *** SORUN ÇÖZÜMÜ SONU ***
 
 export async function deleteUser(userId: string) {
   const adminSupabase = createAdminClient();
   
   const { error } = await adminSupabase.auth.admin.deleteUser(userId);
-
   if (error) {
     console.error("Kullanıcı silme hatası:", error);
     return { success: false, message: `Silme hatası: ${error.message}` };
@@ -580,7 +575,6 @@ export async function getUserProfiles() {
   const supabase = createAdminClient();
   
   const { data, error } = await supabase.rpc('get_user_profiles');
-
   if (error) {
     console.error("Server Action getUserProfiles Hatası:", error);
   }
@@ -592,7 +586,6 @@ export async function getUserProfiles() {
 export async function updateUserDashboardLayout(layout: DashboardLayoutSettings) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-
   if (!user) {
     return { success: false, message: 'Kullanıcı bulunamadı.' };
   }
@@ -603,7 +596,6 @@ export async function updateUserDashboardLayout(layout: DashboardLayoutSettings)
       user_id: user.id,
       dashboard_layout: layout,
     }, { onConflict: 'user_id' });
-
   if (error) {
     console.error("Dashboard layout güncelleme hatası:", error);
     return { success: false, message: 'Layout güncellenemedi.' };
