@@ -49,6 +49,8 @@ export default function RootLayout({
           }}
         />
         {children}
+        <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+        <script>eruda.init();</script>
       </body>
     </html>
   );
