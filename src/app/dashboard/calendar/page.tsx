@@ -11,6 +11,8 @@ import RequestDetailsModal from '@/components/RequestDetailsModal';
 import type { LeaveRequest } from '../requests/page';
 import { User as UserIcon } from 'lucide-react';
 import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
+// GÜNCELLEME: Güvenli tarih fonksiyonunu import ediyoruz.
+import { safeNewDate } from '@/lib/utils';
 
 type CalendarEvent = {
   title: string;
@@ -40,7 +42,6 @@ export default function CalendarPage() {
 
   useEffect(() => {
     const fetchPersonnel = async () => {
-      // DÜZELTME: Kullanılmayan error değişkeni kaldırıldı.
       const { data } = await supabase
         .from('personnel')
         .select('id, full_name')
@@ -70,12 +71,20 @@ export default function CalendarPage() {
       setLoading(false);
       return;
     }
-    
+
+    // GÜNCELLEME: Bitiş tarihini güvenli bir şekilde 1 gün ileri almak için yeni bir yardımcı fonksiyon.
+    const getEndDatePlusOne = (dateString: string) => {
+      const date = safeNewDate(dateString);
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split('T')[0];
+    };
+
     if (personnelId) {
       const leaveEvents: CalendarEvent[] = (requestsRes.data as LeaveRequest[]).map(req => ({
         title: req.personnel_full_name,
         start: req.start_date,
-        end: new Date(new Date(req.end_date.replace(/-/g, '/')).setDate(new Date(req.end_date.replace(/-/g, '/')).getDate() + 1)).toISOString().split('T')[0],
+        // GÜNCELLEME: Yardımcı fonksiyon kullanıldı.
+        end: getEndDatePlusOne(req.end_date),
         display: 'background',
         backgroundColor: 'rgba(239, 68, 68, 0.4)',
         borderColor: 'transparent',
@@ -89,7 +98,8 @@ export default function CalendarPage() {
         const leaveEvents: CalendarEvent[] = (requestsRes.data as LeaveRequest[]).map(req => ({
             title: req.personnel_full_name || 'Bilinmeyen',
             start: req.start_date,
-            end: new Date(new Date(req.end_date).setDate(new Date(req.end_date).getDate() + 1)).toISOString().split('T')[0],
+            // GÜNCELLEME: Hatanın olduğu yerdi, yardımcı fonksiyon ile düzeltildi.
+            end: getEndDatePlusOne(req.end_date),
             backgroundColor: 'transparent',
             borderColor: 'transparent',
             textColor: '#cbd5e1',
@@ -144,7 +154,7 @@ export default function CalendarPage() {
             <h1 className="text-3xl font-bold">Genel Takvim</h1>
             <div className='w-full md:w-auto'>
               <select
-                value={selectedPersonnelId}
+                 value={selectedPersonnelId}
                 onChange={(e) => setSelectedPersonnelId(e.target.value)}
                 className="w-full md:w-72 bg-black/20 py-2 px-4 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >

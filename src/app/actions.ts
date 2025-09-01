@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+// GÜNCELLEME: Güvenli tarih fonksiyonumuzu import ediyoruz.
+import { safeNewDate } from '@/lib/utils';
 
 type GridLayoutItem = {
   i: string;
@@ -221,7 +223,6 @@ export async function updatePersonnel(formData: FormData) {
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
 
     // YENİ EKLENEN ALANLAR
-    
     department: formData.get('department') as string,
     job_title: formData.get('job_title') as string,
     employment_type: formData.get('employment_type') as string,
@@ -338,7 +339,8 @@ export async function updateLeaveRequestDates(formData: FormData) {
     action: "Tarih Güncellendi",
     actor: `${actorName} (${profile.role})`,
     timestamp: new Date().toISOString(),
-    notes: `İzin tarihi değiştirildi. Eski: ${originalDates}, Yeni: ${new Date(newStartDate).toLocaleDateString('tr-TR')} - ${new Date(newEndDate).toLocaleDateString('tr-TR')}`,
+    // GÜNCELLEME: new Date() çağrıları safeNewDate() ile değiştirildi.
+    notes: `İzin tarihi değiştirildi. Eski: ${originalDates}, Yeni: ${safeNewDate(newStartDate).toLocaleDateString('tr-TR')} - ${safeNewDate(newEndDate).toLocaleDateString('tr-TR')}`,
   };
   const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
   const { error: updateError } = await supabase
@@ -536,7 +538,8 @@ export async function createUser(formData: FormData) {
 // *** SORUN ÇÖZÜMÜ BAŞLANGICI ***
 // Admin yetkisiyle çalışması için 'createAdminClient' kullanıldı.
 export async function updateUser(formData: FormData) {
-  const adminSupabase = createAdminClient(); // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
+  const adminSupabase = createAdminClient();
+  // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
   const userId = formData.get('userId') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
@@ -560,7 +563,6 @@ export async function updateUser(formData: FormData) {
 
 export async function deleteUser(userId: string) {
   const adminSupabase = createAdminClient();
-  
   const { error } = await adminSupabase.auth.admin.deleteUser(userId);
   if (error) {
     console.error("Kullanıcı silme hatası:", error);
@@ -573,7 +575,6 @@ export async function deleteUser(userId: string) {
 
 export async function getUserProfiles() {
   const supabase = createAdminClient();
-  
   const { data, error } = await supabase.rpc('get_user_profiles');
   if (error) {
     console.error("Server Action getUserProfiles Hatası:", error);

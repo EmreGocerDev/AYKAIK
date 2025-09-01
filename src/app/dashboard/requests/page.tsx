@@ -7,6 +7,8 @@ import GlassCard from '@/components/GlassCard';
 import RequestDetailsModal from '@/components/RequestDetailsModal';
 import Pagination from '@/components/Pagination';
 import toast from 'react-hot-toast';
+// GÜNCELLEME: Güvenli tarih fonksiyonunu import ediyoruz.
+import { safeNewDate } from '@/lib/utils';
 
 export type LeaveRequestStatus = 'pending' | 'approved_by_coordinator' | 'rejected_by_coordinator' | 'approved' | 'rejected';
 
@@ -16,7 +18,6 @@ type HistoryEntry = {
   timestamp: string;
   notes: string;
 };
-
 export type LeaveRequest = {
   id: number;
   start_date: string;
@@ -39,7 +40,6 @@ const statusColors: { [key in LeaveRequestStatus]: string } = {
   approved: 'bg-green-500/20 text-green-300 border-green-500/30',
   rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
 };
-
 const statusTranslations: { [key in LeaveRequestStatus]: string } = {
   pending: 'Beklemede',
   approved_by_coordinator: 'Koordinatör Onayladı',
@@ -47,15 +47,12 @@ const statusTranslations: { [key in LeaveRequestStatus]: string } = {
   approved: 'Onaylandı',
   rejected: 'Reddedildi',
 };
-
-// İzin türleri için sabit bir liste oluşturalım
 const leaveTypes = [
     { value: 'yıllık izin', label: 'Yıllık İzin' },
     { value: 'ücretli izin', label: 'Ücretli İzin (Mazeret)' },
     { value: 'ücretsiz izin', label: 'Ücretsiz İzin' },
     { value: 'raporlu', label: 'Raporlu (İstirahat)' },
 ];
-
 export default function LeaveRequestsPage() {
   const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -63,7 +60,6 @@ export default function LeaveRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [regions, setRegions] = useState<Region[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('');
-  // --- YENİ EKLENDİ: İzin türü filtresi için state ---
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [totalRequests, setTotalRequests] = useState(0);
@@ -79,12 +75,10 @@ export default function LeaveRequestsPage() {
     fetchRegions();
   }, [supabase]);
 
-  // --- GÜNCELLENDİ: fetchLeaveRequests fonksiyonu leaveType parametresi alacak ---
   const fetchLeaveRequests = useCallback(async (page: number, regionId: string, search: string, leaveType: string) => {
     setLoading(true);
     const from = (page - 1) * PAGE_SIZE;
     
-    // --- GÜNCELLENDİ: RPC çağrısına leave_type_filter eklendi ---
     const { data, error } = await supabase.rpc('search_leave_requests', {
         region_filter_id: regionId ? Number(regionId) : null,
         search_query: search || null,
@@ -113,12 +107,10 @@ export default function LeaveRequestsPage() {
       return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // --- GÜNCELLENDİ: Filtreler değiştiğinde sayfayı başa al ---
   useEffect(() => {
       setCurrentPage(1);
   }, [selectedRegion, selectedLeaveType]);
 
-  // --- GÜNCELLENDİ: useEffect, selectedLeaveType'ı dinleyecek ve fetch'e gönderecek ---
   useEffect(() => {
     fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType);
   }, [currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType, fetchLeaveRequests]);
@@ -128,7 +120,6 @@ export default function LeaveRequestsPage() {
     fetchLeaveRequests(currentPage, selectedRegion, debouncedSearchQuery, selectedLeaveType);
   }
 
-  // --- GÜNCELLENDİ: clearFilters fonksiyonu izin türü filtresini de temizleyecek ---
   const clearFilters = () => {
     setSelectedRegion('');
     setSearchQuery('');
@@ -152,7 +143,7 @@ export default function LeaveRequestsPage() {
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-lg font-semibold">
-                <Filter size={20} />
+                 <Filter size={20} />
                 <h3>Filtreler</h3>
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
@@ -166,13 +157,12 @@ export default function LeaveRequestsPage() {
                     className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10"
                   />
                 </div>
-                {/* --- YENİ EKLENDİ: İzin türü için dropdown menüsü --- */}
                 <select
                   value={selectedLeaveType}
                   onChange={(e) => setSelectedLeaveType(e.target.value)}
                   className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10"
                 >
-                  <option value="">Tüm İzin Türleri</option>
+                   <option value="">Tüm İzin Türleri</option>
                   {leaveTypes.map(type => (
                     <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
@@ -182,7 +172,7 @@ export default function LeaveRequestsPage() {
                   onChange={(e) => setSelectedRegion(e.target.value)}
                   className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10"
                 >
-                  <option value="">Tüm Bölgeler</option>
+                   <option value="">Tüm Bölgeler</option>
                   {regions.map(region => (
                     <option key={region.id} value={region.id}>{region.name}</option>
                   ))}
@@ -210,11 +200,11 @@ export default function LeaveRequestsPage() {
                 <table className="w-full text-left">
                   <thead className="border-b border-white/10 text-sm text-gray-400">
                     <tr>
-                      <th className="p-4">Personel</th>
+                       <th className="p-4">Personel</th>
                       <th className="p-4 hidden md:table-cell">Başlangıç Tarihi</th>
                       <th className="p-4 hidden md:table-cell">Bitiş Tarihi</th>
                       <th className="p-4">Durum</th>
-                      <th className="p-4 text-right">İşlemler</th>
+                       <th className="p-4 text-right">İşlemler</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -222,21 +212,22 @@ export default function LeaveRequestsPage() {
                       requests.map((request) => (
                         <tr key={request.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="p-4 font-semibold">
-                            {request.personnel_full_name || 'Bilinmeyen Personel'}
+                             {request.personnel_full_name || 'Bilinmeyen Personel'}
                           </td>
-                          <td className="p-4 hidden md:table-cell">{new Date(request.start_date).toLocaleDateString('tr-TR')}</td>
-                          <td className="p-4 hidden md:table-cell">{new Date(request.end_date).toLocaleDateString('tr-TR')}</td>
-                          <td className="p-4">
+                          {/* GÜNCELLEME: Tarih gösterimleri safeNewDate ile güvenli hale getirildi. */}
+                          <td className="p-4 hidden md:table-cell">{safeNewDate(request.start_date).toLocaleDateString('tr-TR')}</td>
+                          <td className="p-4 hidden md:table-cell">{safeNewDate(request.end_date).toLocaleDateString('tr-TR')}</td>
+                           <td className="p-4">
                             <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${statusColors[request.status]}`}>
                               {statusTranslations[request.status]}
-                            </span>
+                             </span>
                           </td>
                           <td className="p-4 text-right">
                             <button 
                               onClick={() => setSelectedRequest(request)} 
                               className="p-2 rounded-full hover:bg-white/10"
                             >
-                              <MoreHorizontal size={20} />
+                               <MoreHorizontal size={20} />
                             </button>
                           </td>
                         </tr>
@@ -244,7 +235,7 @@ export default function LeaveRequestsPage() {
                     ) : (
                       <tr>
                         <td colSpan={5} className="text-center p-8 text-gray-400">
-                          Filtrelerle eşleşen izin talebi bulunamadı.
+                           Filtrelerle eşleşen izin talebi bulunamadı.
                         </td>
                       </tr>
                     )}

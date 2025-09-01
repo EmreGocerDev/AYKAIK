@@ -6,6 +6,8 @@ import GlassCard from '@/components/GlassCard';
 import RequestDetailsModal from '@/components/RequestDetailsModal';
 import { Bell, Check, ThumbsDown, Hourglass } from 'lucide-react';
 import type { LeaveRequest } from '../requests/page';
+// GÜNCELLEME: Güvenli tarih fonksiyonunu import ediyoruz.
+import { safeNewDate } from '@/lib/utils';
 
 type Notification = Omit<LeaveRequest, 'total_count'>;
 export default function NotificationsPage() {
@@ -18,7 +20,6 @@ export default function NotificationsPage() {
     approved_by_coordinator: { icon: <Check size={16} />, color: "text-sky-400", text: "Koordinatör Onayladı" },
     rejected_by_coordinator: { icon: <ThumbsDown size={16} />, color: "text-orange-400", text: "Koordinatör Reddetti" },
   };
-
   const fetchNotifications = useCallback(async () => {
     if (!profile) return;
     
@@ -32,49 +33,37 @@ export default function NotificationsPage() {
     } else {
        setNotifications(data as Notification[]);
     }
-    // Only set loading to false after the first fetch attempt.
     if(loading) setLoading(false);
   }, [supabase, profile, loading]);
 
-  // Combined effect for fetching initial data and setting up realtime subscription.
-  // This ensures that whenever the user's profile changes, both the initial data
-  // is re-fetched and the realtime subscription is updated correctly.
   useEffect(() => {
     if (!profile) {
-      setLoading(false); // Ensure loading state is turned off if no profile is found.
+      setLoading(false);
       return;
     }
 
-    // Fetch initial notifications for the current user profile.
     fetchNotifications();
 
-    // Set up a realtime subscription to re-fetch when the underlying data changes.
     const channel = supabase
       .channel('realtime-notifications-page')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'leave_requests' },
         (payload) => {
-          // A change occurred in leave requests, re-fetch the notifications
-          // to ensure the list is always up-to-date. The `get_notifications` RPC
-          // will handle the logic of what is relevant to the current user.
           console.log('İzin taleplerinde değişiklik algılandı, liste güncelleniyor.', payload);
           fetchNotifications();
         }
       )
       .subscribe();
 
-    // Clean up the subscription when the component unmounts or the profile changes.
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase, profile, fetchNotifications]);
 
-
   const handleModalClose = () => {
     setSelectedRequest(null);
     fetchNotifications();
-    // Update the global counter immediately after an action.
     if(profile) {
         supabase.rpc('get_notification_count', {
             user_role: profile.role,
@@ -84,7 +73,6 @@ export default function NotificationsPage() {
   };
 
   const pageTitle = profile?.role === 'admin' ? "İşlem Bekleyen Talepler" : "Bölgenizdeki Onay Bekleyen Talepler";
-  
   return (
     <>
       <div className="p-4 md:p-8 text-white">
@@ -111,7 +99,8 @@ export default function NotificationsPage() {
                     </div>
                     <div className="flex-1 text-left sm:text-center">
                         <p className="text-sm text-gray-400">İzin Tarihleri</p>
-                        <p className="font-semibold">{new Date(req.start_date).toLocaleDateString('tr-TR')} - {new Date(req.end_date).toLocaleDateString('tr-TR')}</p>
+                        {/* GÜNCELLEME: Tarih gösterimleri safeNewDate ile güvenli hale getirildi. */}
+                        <p className="font-semibold">{safeNewDate(req.start_date).toLocaleDateString('tr-TR')} - {safeNewDate(req.end_date).toLocaleDateString('tr-TR')}</p>
                     </div>
                     <div className={`flex items-center gap-2 font-semibold ${statusInfo[req.status]?.color || 'text-gray-400'}`}>
                         {statusInfo[req.status]?.icon}
