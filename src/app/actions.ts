@@ -79,8 +79,8 @@ export async function createLeaveRequest(formData: FormData) {
 export async function login(prevState: LoginState, formData: FormData) {
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
-  const supabase = createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const supabase = createAdminClient();  
+  const {data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });

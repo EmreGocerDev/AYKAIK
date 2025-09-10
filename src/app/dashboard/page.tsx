@@ -288,7 +288,7 @@ export default function DashboardPage() {
      );
 
     return {
-       /* pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
+        pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
         approvedThisMonth: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-green-500/10"><CalendarCheck size={24} className="text-green-400" /></div><div><p className="text-3xl font-bold text-green-400">{data.stats.approvedThisMonthCount}</p><p className="text-sm text-gray-400">Bu Ay Onaylanan</p></div></div></GlassCard>,
         onLeaveToday: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-sky-500/10"><UserCheck size={24} className="text-sky-400" /></div><div><p className="text-3xl font-bold text-sky-400">{data.stats.onLeaveTodayCount}</p><p className="text-sm text-gray-400">Bugün İzinli</p></div></div></GlassCard>,
         awaitingFinal: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-orange-500/10"><UserX size={24} className="text-orange-400" /></div><div><p className="text-3xl font-bold text-orange-400">{data.stats.awaitingFinalApprovalCount!}</p><p className="text-sm text-gray-400">Nihai Onay Bekleyen</p></div></div></GlassCard>,
@@ -335,7 +335,7 @@ export default function DashboardPage() {
                 <SimpleBarChart data={leaveStatusData} title="İzin Durumları Dağılımı" />
             </GlassCard>
         ),
-        awaitingApproval: awaitingApprovalWidget,*/
+        awaitingApproval: awaitingApprovalWidget,
     };
   }, [data, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, awaitingApprovalData]);
 
