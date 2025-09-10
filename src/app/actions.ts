@@ -79,12 +79,15 @@ export async function createLeaveRequest(formData: FormData) {
 export async function login(prevState: LoginState, formData: FormData) {
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
-  const supabase = createAdminClient();  
-  const {data, error } = await supabase.auth.signInWithPassword({
+  const supabase = createClient();
+  const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
   if (error) {
+    if (typeof window !== "undefined") {
+      alert(JSON.stringify(error, null, 2));
+    }
     return {
       message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
     };
