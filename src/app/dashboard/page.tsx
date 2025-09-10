@@ -288,7 +288,7 @@ export default function DashboardPage() {
      );
 
     return {
-        pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
+       /* pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
         approvedThisMonth: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-green-500/10"><CalendarCheck size={24} className="text-green-400" /></div><div><p className="text-3xl font-bold text-green-400">{data.stats.approvedThisMonthCount}</p><p className="text-sm text-gray-400">Bu Ay Onaylanan</p></div></div></GlassCard>,
         onLeaveToday: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-sky-500/10"><UserCheck size={24} className="text-sky-400" /></div><div><p className="text-3xl font-bold text-sky-400">{data.stats.onLeaveTodayCount}</p><p className="text-sm text-gray-400">Bugün İzinli</p></div></div></GlassCard>,
         awaitingFinal: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-orange-500/10"><UserX size={24} className="text-orange-400" /></div><div><p className="text-3xl font-bold text-orange-400">{data.stats.awaitingFinalApprovalCount!}</p><p className="text-sm text-gray-400">Nihai Onay Bekleyen</p></div></div></GlassCard>,
@@ -297,7 +297,7 @@ export default function DashboardPage() {
         recentRequests: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><Clock size={18}/> Son Talepler</h3><div className="space-y-2 overflow-y-auto flex-1">{data.recentRequests.length > 0 ? data.recentRequests.map(req => (<Link href="/dashboard/requests" key={req.id} className="block bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-colors"><div className="flex justify-between items-center text-sm"><p className="font-semibold truncate pr-2">{req.personnel_full_name}</p><span className={`font-semibold px-2 py-0.5 rounded-full border text-xs whitespace-nowrap ${statusColors[req.status] || 'text-gray-400'}`}>{statusTranslations[req.status] || req.status}</span></div><p className="text-xs text-gray-400 capitalize">{req.leave_type}</p></Link>)) : <p className="text-gray-400 text-center py-4">Yeni talep yok.</p>}</div></GlassCard>),
         upcomingLeaves: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><TrendingUp size={18}/> Yaklaşan İzinler</h3><div className="space-y-2 overflow-y-auto flex-1">{data.upcomingLeaves.length > 0 ? data.upcomingLeaves.map(leave => (<div key={leave.id} className="bg-white/5 p-3 rounded-lg text-sm"><div className="flex justify-between items-center"><p className="font-semibold truncate pr-2">{leave.personnel?.full_name}</p><p className="text-xs text-gray-300 font-medium whitespace-nowrap">{new Date(leave.start_date.replace(/-/g, '/')).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}</p></div></div>)) : <p className="text-gray-400 text-center py-4">Yaklaşan izin bulunmuyor.</p>}</div></GlassCard>),
         leaveTypeDistribution: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><SimpleBarChart data={data.leaveTypeDistribution} title="İzin Türü Dağılımı" /></GlassCard>),
-        welcome: <WelcomeWidget profile={profile} glassCardProps={glassCardProps} />,
+        welcome: <WelcomeWidget profile={profile} glassCardProps={glassCardProps} />,*/
         quickActions: (
             <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center">
                 <div className="flex flex-row items-center justify-center gap-4 flex-wrap">
@@ -378,13 +378,29 @@ export default function DashboardPage() {
             </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-    {visibleWidgets.map(key => (
-        <div key={key} className="min-h-[200px]">
-            {allWidgets[key as keyof typeof allWidgets]}
-        </div>
-    ))}
-</div>
+        <ResponsiveGridLayout
+           className="layout"
+            layouts={dashboardLayout.layouts}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+            rowHeight={50}
+            onLayoutChange={handleLayoutChange}
+           isDraggable={true}
+            isResizable={true}
+            draggableHandle=".drag-handle"
+            isBounded={true}
+        >
+            {visibleWidgets.map(key => (
+                <div key={key} className="relative group bg-transparent">
+                     <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
+                        <GripVertical />
+                    </div>
+                    <div className="h-full w-full">
+                         {allWidgets[key as keyof typeof allWidgets]}
+                    </div>
+                </div>
+            ))}
+        </ResponsiveGridLayout>
       </div>
     </div>
   );
