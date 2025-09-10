@@ -359,11 +359,49 @@ export default function DashboardPage() {
     return true;
   });
   
-  // ...
-return (
+  return (
     <div className="w-full min-h-screen p-4 md:p-6 lg:p-8">
-        <h1 className="text-white text-4xl">Dashboard Test Sayfası</h1>
-        <p className="text-white">Eğer bu sayfayı görüyorsanız, sorun render edilen komponentlerden birinde.</p>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white">Ayka Enerji İnsan Kaynakları Kokpiti</h1>
+                 </div>
+                <button
+                    onClick={() => setDashboardLayout(DEFAULT_DASHBOARD_SETTINGS)}
+                    className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
+                    title="Paneli Sıfırla"
+                 >
+                    <RefreshCw size={16} />
+                    <span>Sıfırla</span>
+                </button>
+            </div>
+        </div>
+        
+        <ResponsiveGridLayout
+           className="layout"
+            layouts={dashboardLayout.layouts}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+            cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+            rowHeight={50}
+            onLayoutChange={handleLayoutChange}
+           isDraggable={true}
+            isResizable={true}
+            draggableHandle=".drag-handle"
+            isBounded={true}
+        >
+            {visibleWidgets.map(key => (
+                <div key={key} className="relative group bg-transparent">
+                     <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
+                        <GripVertical />
+                    </div>
+                    <div className="h-full w-full">
+                         {allWidgets[key as keyof typeof allWidgets]}
+                    </div>
+                </div>
+            ))}
+        </ResponsiveGridLayout>
+      </div>
     </div>
-);
+  );
 }

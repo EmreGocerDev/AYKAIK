@@ -50,7 +50,7 @@ export default function EditPersonnelModal({ personnelToEdit, onClose, onPersonn
     if (!dateString) return '';
     try {
         // GÜNCELLENDİ: '-' yerine '/' kullanıldı
-        return new Date(dateString.replace(/-/g, '/')).toISOString().split('T')[0];
+        return new Date(dateString.replace(/-/g, '/')).toISOString().split('T')[0]; 
     } catch  {
         return '';
     }
