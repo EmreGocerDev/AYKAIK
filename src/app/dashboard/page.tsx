@@ -135,16 +135,19 @@ const WeatherWidget = ({ glassCardProps }: { glassCardProps: GlassCardProps }) =
     const [manualCityInput, setManualCityInput] = useState<string>("");
 
     const weatherIconMap: { [key: string]: React.ReactNode } = {
-        '01d': <WiDaySunny size={64} />, '01n': <WiNightClear size={64} />, '02d': <WiCloudy size={64} />, 
-        '02n': <WiCloudy size={64} />, '03d': <WiCloudy size={64} />, '03n': <WiCloudy size={64} />,
-        '04d': <WiCloudy size={64} />, '04n': <WiCloudy size={64} />, '09d': <WiRain size={64} />, 
-        '09n': <WiRain size={64} />, '10d': <WiRain size={64} />, '10n': <WiRain size={64} />,
-        '11d': <WiThunderstorm size={64} />, '11n': <WiThunderstorm size={64} />, '13d': <WiSnow size={64} />, 
-        '13n': <WiSnow size={64} />, '50d': <WiCloudy size={64} />, '50n': <WiCloudy size={64} />,
+        '01d': <WiDaySunny className="w-12 h-12 sm:w-16 sm:h-16" />, '01n': <WiNightClear className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '02d': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />, '02n': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '03d': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />, '03n': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '04d': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />, '04n': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '09d': <WiRain className="w-12 h-12 sm:w-16 sm:h-16" />, '09n': <WiRain className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '10d': <WiRain className="w-12 h-12 sm:w-16 sm:h-16" />, '10n': <WiRain className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '11d': <WiThunderstorm className="w-12 h-12 sm:w-16 sm:h-16" />, '11n': <WiThunderstorm className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '13d': <WiSnow className="w-12 h-12 sm:w-16 sm:h-16" />, '13n': <WiSnow className="w-12 h-12 sm:w-16 sm:h-16" />,
+        '50d': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />, '50n': <WiCloudy className="w-12 h-12 sm:w-16 sm:h-16" />,
     };
 
     const fetchWeather = async (query: {lat: number, lon: number} | {city: string}) => {
-        const API_KEY = 'KENDI_API_ANAHTARINIZ_BURADA_YAZILI_OLMALI'; // API Anahtarınızı buraya yazın
+        const API_KEY = 'f8c9acc4fdb3f8cf93dd6630bd46e8df'; // API Anahtarınızı buraya yazın
         let url = '';
         if ('city' in query) {
             url = `https://api.openweathermap.org/data/2.5/weather?q=${query.city}&appid=${API_KEY}&units=metric&lang=tr`;
