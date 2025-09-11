@@ -96,22 +96,27 @@ const SimpleBarChart = ({ data, title }: { data: { name: string; count: number }
 // YARDIMCI WIDGET'LARIN TANIMLANMASI
 // =================================================================================
 
+// src/app/dashboard/page.tsx dosyasındaki WelcomeWidget bileşeni
+
 const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: string} | null, glassCardProps: GlassCardProps }) => {
     const [time, setTime] = useState(new Date());
-
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    const greetings = [ "Merhaba", "Hoş geldiniz", "İyi çalışmalar", "Harika bir gün dilerim" ];
     const getGreeting = () => {
         const hour = time.getHours();
         if (hour < 5) return "İyi geceler"; if (hour < 12) return "Günaydın";
-        if (hour < 18) return "İyi günler"; return "İyi akşamlar";
+        if (hour < 18) return "İyi günler";
+        return "İyi akşamlar";
     };
-    // DÜZELTME 2: 'greetings' bağımlılık dizisine eklendi
-    const randomGreeting = useMemo(() => greetings[Math.floor(Math.random() * greetings.length)], [greetings]);
+
+    // DÜZELTME: 'greetings' dizisi useMemo içine taşındı ve bağımlılıklardan kaldırıldı.
+    const randomGreeting = useMemo(() => {
+      const greetings = [ "Merhaba", "Hoş geldiniz", "İyi çalışmalar", "Harika bir gün dilerim" ];
+      return greetings[Math.floor(Math.random() * greetings.length)];
+    }, []);
 
     return (
         <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center items-center text-center">

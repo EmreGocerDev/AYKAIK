@@ -74,10 +74,13 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
     welcome: true, quickActions: true,
   }
 };
+
+// DÜZELTME: isLoading özelliği eklendi
 type SettingsContextType = {
   supabase: SupabaseClient;
   user: User | null;
   profile: Profile | null;
+  isLoading: boolean; // Eksik olan özellik
   notificationCount: number;
   setNotificationCount: (count: number) => void;
   weekendConfiguration: WeekendConfiguration;
@@ -98,9 +101,11 @@ type SettingsContextType = {
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Yüklenme state'i
   const [notificationCount, setNotificationCount] = useState(0);
   const [bg, setBg] = useState("/backgrounds/bg1.jpg");
   const [tintValue, setTintValue] = useState(15);
@@ -136,55 +141,62 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         document.removeEventListener('keydown', unlockAudio);
     };
   }, [audioContext]);
-
+  
   useEffect(() => {
     const fetchInitialData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
-        const [profileRes, settingsRes, weekendRes] = await Promise.all([
-          supabase.from("profiles").select('*').eq('id', user.id).single(),
-          supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
-          supabase.from("system_settings").select("value").eq("key", "weekend_configuration").single()
-        ]);
-  
-        if (profileRes.data) {
-            setProfile(profileRes.data);
-            const { data: count, error } = await supabase.rpc('get_notification_count', {
-                user_role: profileRes.data.role,
-                user_region_id: profileRes.data.region_id
-            });
-            if (!error) { setNotificationCount(count); }
-        }
-        if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
-        if (settingsRes.data) {
-          const userSettings = settingsRes.data as UserSettings;
-          setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
-          setTintValue(userSettings.glass_opacity === null ? 15 : userSettings.glass_opacity);
-          setGrainOpacity(userSettings.grain_opacity === null ? 20 : userSettings.grain_opacity);
-          setBlurPx(userSettings.glass_blur_px === null ? 16 : userSettings.glass_blur_px);
-          setBorderRadiusPx(userSettings.glass_border_radius_px === null ? 16 : userSettings.glass_border_radius_px);
-          setNotificationSoundUrl(userSettings.notification_sound_url || '/sounds/notification1.mp3');
-          if (userSettings.dashboard_layout && typeof userSettings.dashboard_layout === 'object') {
-            const savedSettings = userSettings.dashboard_layout as Partial<DashboardLayoutSettings>;
-            const defaultLayoutMap = new Map((DEFAULT_DASHBOARD_SETTINGS.layouts.lg || []).map(item => [item.i, item]));
-            const savedLayouts = savedSettings.layouts?.lg || [];
-            const mergedLayouts = savedLayouts.map(savedItem => {
-                const defaultItem = defaultLayoutMap.get(savedItem.i);
-                return { ...defaultItem, ...savedItem };
-            });
-            defaultLayoutMap.forEach((defaultItem, key) => {
-                if (!mergedLayouts.some(item => item.i === key)) {
-                    mergedLayouts.push(defaultItem);
-                }
-            });
-            const validatedSettings: DashboardLayoutSettings = {
-              layouts: { ...DEFAULT_DASHBOARD_SETTINGS.layouts, ...savedSettings.layouts, lg: mergedLayouts as Layout[] },
-              visible: { ...DEFAULT_DASHBOARD_SETTINGS.visible, ...savedSettings.visible },
-            };
-            setDashboardLayoutState(validatedSettings);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUser(user);
+          const [profileRes, settingsRes, weekendRes] = await Promise.all([
+            supabase.from("profiles").select('*').eq('id', user.id).single(),
+            supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
+            supabase.from("system_settings").select("value").eq("key", "weekend_configuration").single()
+          ]);
+    
+          if (profileRes.data) {
+              setProfile(profileRes.data);
+              const { data: count, error } = await supabase.rpc('get_notification_count', {
+                  user_role: profileRes.data.role,
+                  user_region_id: profileRes.data.region_id
+              });
+             
+               if (!error) { setNotificationCount(count); }
+          }
+          if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
+          if (settingsRes.data) {
+            const userSettings = settingsRes.data as UserSettings;
+            setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
+            setTintValue(userSettings.glass_opacity === null ? 15 : userSettings.glass_opacity);
+            setGrainOpacity(userSettings.grain_opacity === null ? 20 : userSettings.grain_opacity);
+            setBlurPx(userSettings.glass_blur_px === null ? 16 : userSettings.glass_blur_px);
+            setBorderRadiusPx(userSettings.glass_border_radius_px === null ? 16 : userSettings.glass_border_radius_px);
+            setNotificationSoundUrl(userSettings.notification_sound_url || '/sounds/notification1.mp3');
+            if (userSettings.dashboard_layout && typeof userSettings.dashboard_layout === 'object') {
+              const savedSettings = userSettings.dashboard_layout as Partial<DashboardLayoutSettings>;
+              const defaultLayoutMap = new Map((DEFAULT_DASHBOARD_SETTINGS.layouts.lg || []).map(item => [item.i, item]));
+              const savedLayouts = savedSettings.layouts?.lg || [];
+              const mergedLayouts = savedLayouts.map(savedItem => {
+                  const defaultItem = defaultLayoutMap.get(savedItem.i);
+                  return { ...defaultItem, ...savedItem };
+              });
+              defaultLayoutMap.forEach((defaultItem, key) => {
+                  if (!mergedLayouts.some(item => item.i === key)) {
+                      mergedLayouts.push(defaultItem);
+                  }
+              });
+              const validatedSettings: DashboardLayoutSettings = {
+                layouts: { ...DEFAULT_DASHBOARD_SETTINGS.layouts, ...savedSettings.layouts, lg: mergedLayouts as Layout[] },
+                visible: { ...DEFAULT_DASHBOARD_SETTINGS.visible, ...savedSettings.visible },
+              };
+              setDashboardLayoutState(validatedSettings);
+            }
           }
         }
+      } catch (error) {
+        console.error("Başlangıç verileri çekilirken hata:", error);
+      } finally {
+        setIsLoading(false); // Her durumda yüklenmeyi bitir
       }
     };
     fetchInitialData();
@@ -199,13 +211,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }).subscribe();
       return () => { supabase.removeChannel(profileChannel); };
     }
+  
   }, [user]);
   
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
     updateUserDashboardLayout(newLayout);
   };
-
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window) || !user || !profile) {
       return;
@@ -219,8 +231,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     const showNotification = (title: string, options: NotificationOptions) => {
       if (Notification.permission !== 'granted') return;
-
-      // HATA DÜZELTİLDİ: 'let' yerine 'const' kullanıldı.
+ 
       const canPlaySound = notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running';
 
       if (canPlaySound) {
@@ -230,8 +241,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
           if (playPromise !== undefined) {
             playPromise.catch(error => {
-              console.error("Bildirim sesi çalma hatası (tarayıcı engellemiş olabilir):", error);
-              audioContext?.resume();
+               console.error("Bildirim sesi çalma hatası (tarayıcı engellemiş olabilir):", error);
+                audioContext?.resume();
             });
           }
           new Notification(title, { ...options, silent: true });
@@ -251,7 +262,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       if (payload.eventType === 'INSERT' && profile.role === 'coordinator') {
         const newRequest = payload.new as { personnel_id: number };
         const { data: personnel } = await supabase.from('personnel').select('region_id, full_name').eq('id', newRequest.personnel_id).single();
-        if (personnel && personnel.region_id === profile.region_id) {
+   
+         if (personnel && personnel.region_id === profile.region_id) {
           showNotification('Yeni İzin Talebi', { body: `${personnel.full_name} yeni bir izin talebinde bulundu.`, icon: '/favicon.ico' });
         }
       }
@@ -269,13 +281,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-    // UYARI DÜZELTİLDİ: 'supabase' bağımlılık dizisinden kaldırıldı.
   }, [user, profile, notificationSoundUrl, audioContext, setNotificationCount]);
 
+  // DÜZELTME: isLoading değeri value objesine eklendi
   const value = {
     supabase,
     user,
     profile,
+    isLoading,
     notificationCount,
     setNotificationCount,
     weekendConfiguration,
@@ -289,7 +302,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     notificationSoundUrl,
     setNotificationSoundUrl,
   };
-  
   return (
     <SettingsContext.Provider value={value}>
       {children}

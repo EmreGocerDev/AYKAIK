@@ -96,3 +96,38 @@ html, body {
 .fc-bg-event {
     pointer-events: none;
 }
+/* YENİ: Matrix Yükleme Ekranı Stilleri */
+/* YENİ: Yükleme Ekranı Stilleri */
+.loader-screen {
+  position: fixed;
+  inset: 0;
+  background-color: #000;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* DÜZELTME: transform ve opacity için geçiş efekti eklendi */
+transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
+}
+
+/* YENİ: Ekran gizlendiğinde aşağıya kayma ve solma efekti */
+.loader-screen.hidden {
+  transform: translateY(100vh);
+  pointer-events: none;
+}
+
+/* YENİ: Ortada dönecek olan yuvarlak animasyon */
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 6px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

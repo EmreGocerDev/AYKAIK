@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from 'react';
-// İkonlar
-import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, MessageSquare } from 'lucide-react';
+// YENİ: Wallet ikonu eklendi
+import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, MessageSquare, Wallet } from 'lucide-react';
 import { useSettings } from "@/contexts/SettingsContext";
 import Image from "next/image";
 
@@ -21,6 +21,9 @@ const inventoryLinks = [
 ];
 
 const feedbackLink = { name: "Geri Bildirim", href: "/dashboard/feedback", icon: MessageSquare };
+
+// YENİ: Ayka Kasa linki eklendi
+const aykaKasaLink = { name: "Ayka Kasa", href: "/dashboard/ayka-kasa", icon: Wallet };
 
 const adminLinks = [
   { name: "Kullanıcı Yönetimi", href: "/dashboard/users", icon: UserCog },
@@ -47,14 +50,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
   const alpha = Math.abs(tintValue) / 100;
 
   useEffect(() => {
-    // Sayfa değiştiğinde, eğer aktif link İK menüsündeyse o menüyü aç
     if (navLinks.some(link => pathname.startsWith(link.href))) {
       setIsIkMenuOpen(true);
     } else {
       setIsIkMenuOpen(false);
     }
 
-    // Sayfa değiştiğinde, eğer aktif link Envanter menüsündeyse o menüyü aç
     if (inventoryLinks.some(link => pathname.startsWith(link.href))) {
       setIsInventoryOpen(true);
     } else {
@@ -79,12 +80,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
            backgroundColor: `rgba(${color}, ${alpha})`,
            backdropFilter: `blur(${blurPx}px)`,
         }}
-        // Hover olayları kaldırıldı
       >
         <div className="absolute inset-0 bg-[url('/noise.png')] pointer-events-none" style={{ opacity: grainEffectOpacity }} />
 
         <div className="relative z-10 flex flex-col h-full">
-          {/* Logo Alanı */}
           <div className="flex items-center justify-center p-4 h-[69px] border-b border-white/10">
             <Image 
               src="/sidebarlogo.png" 
@@ -144,7 +143,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
               </div>
             </div>
 
-            {/* Ayırıcı Çizgi */}
             <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
 
             {/* Envanter Dropdown */}
@@ -186,22 +184,21 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
               </div>
             </div>
 
-             {/* Ayırıcı Çizgi */}
              <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
 
-            {/* Feedback Linki */}
+            {/* YENİ: Ayka Kasa Linki */}
             <ul>
                 <li className="group relative">
                     <Link
-                        href={feedbackLink.href}
+                        href={aykaKasaLink.href}
                         onClick={() => setMobileOpen(false)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${
-                        pathname.startsWith(feedbackLink.href) ? "bg-blue-600/30 text-white" : "text-white hover:bg-white/5"}
+                        pathname.startsWith(aykaKasaLink.href) ? "bg-blue-600/30 text-white" : "text-white hover:bg-white/5"}
                         ${isCollapsed ? 'md:justify-center' : ''}`}
                     >
-                        <feedbackLink.icon className="w-5 h-5 flex-shrink-0" />
+                        <aykaKasaLink.icon className="w-5 h-5 flex-shrink-0" />
                         <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
-                        {feedbackLink.name}
+                        {aykaKasaLink.name}
                         </span>
                     </Link>
                 </li>
@@ -210,7 +207,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
             {/* Yönetim Linkleri */}
             {profile?.role === 'admin' && (
               <>
-                <div className={`px-4 mt-4 mb-2 text-xs font-semibold text-gray-200 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
+                <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+                <div className={`px-4 mt-2 mb-2 text-xs font-semibold text-gray-200 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
                 <ul>
                    {adminLinks.map((link) => {
                     const isActive = pathname.startsWith(link.href);
@@ -236,7 +234,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
             )}
           </nav>
           
-          {/* Tuş işlevselliği geri getirildi */}
           <div className="p-4 border-t border-white/10">
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)} 
