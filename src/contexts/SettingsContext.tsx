@@ -205,7 +205,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Tarayıcı ortamı kontrolleri
     if (typeof window === 'undefined' || !('Notification' in window) || !user || !profile) {
       return;
     }
@@ -216,11 +215,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    // Sağlamlaştırılmış ses çalma ve bildirim gösterme fonksiyonu
     const showNotification = (title: string, options: NotificationOptions) => {
       if (Notification.permission !== 'granted') return;
 
-      let canPlaySound = notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running';
+      // HATA DÜZELTİLDİ: 'let' yerine 'const' kullanıldı.
+      const canPlaySound = notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running';
 
       if (canPlaySound) {
         try {
@@ -230,19 +229,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           if (playPromise !== undefined) {
             playPromise.catch(error => {
               console.error("Bildirim sesi çalma hatası (tarayıcı engellemiş olabilir):", error);
-              // Ses çalınamazsa, bir sonraki deneme için context'i yeniden başlatmayı dene
               audioContext?.resume();
             });
           }
-          // Görsel bildirimi, sesin çalmasını beklemeden göster
           new Notification(title, { ...options, silent: true });
         } catch (e) {
           console.error("Audio nesnesi oluşturulurken veya çalınırken hata:", e);
-          // Hata durumunda sessiz bildirim göster
           new Notification(title, { ...options, silent: true });
         }
       } else {
-        // Ses çalınamayacaksa, normal bildirim göster
         new Notification(title, { ...options, silent: notificationSoundUrl === 'none' });
       }
     };
@@ -272,7 +267,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [user, profile, notificationSoundUrl, audioContext, supabase, setNotificationCount]);
+    // UYARI DÜZELTİLDİ: 'supabase' bağımlılık dizisinden kaldırıldı.
+  }, [user, profile, notificationSoundUrl, audioContext, setNotificationCount]);
 
   const value = {
     supabase,
