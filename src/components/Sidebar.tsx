@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-// YENİ: Bell ikonu eklendi
-import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Building2, Settings, Map, ClipboardList, UserCog, Bell } from 'lucide-react';
+import { useState, useEffect } from 'react';
+// İkonlar
+import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, MessageSquare } from 'lucide-react';
 import { useSettings } from "@/contexts/SettingsContext";
+import Image from "next/image";
 
-// YENİ: Bildirimler linki eklendi
 const navLinks = [
   { name: "Ana Panel", href: "/dashboard", icon: Home },
   { name: "Bildirimler", href: "/dashboard/notifications", icon: Bell },
@@ -15,11 +16,18 @@ const navLinks = [
   { name: "Puantaj Cetveli", href: "/dashboard/timesheet", icon: ClipboardList }
 ];
 
+const inventoryLinks = [
+  { name: "Stok Yönetimi", href: "/dashboard/inventory/stock", icon: Box }
+];
+
+const feedbackLink = { name: "Geri Bildirim", href: "/dashboard/feedback", icon: MessageSquare };
+
 const adminLinks = [
   { name: "Kullanıcı Yönetimi", href: "/dashboard/users", icon: UserCog },
-    { name: "Sistem Ayarları", href: "/dashboard/settings", icon: Settings },
-    { name: "Bölgeler", href: "/dashboard/regions", icon: Map }
+  { name: "Sistem Ayarları", href: "/dashboard/settings", icon: Settings },
+  { name: "Bölgeler", href: "/dashboard/regions", icon: Map }
 ];
+
 type SidebarProps = {
   mobileOpen: boolean;
   setMobileOpen: (isOpen: boolean) => void;
@@ -29,12 +37,30 @@ type SidebarProps = {
 
 export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
-  // YENİ: notificationCount context'ten alındı
   const { profile, tintValue, grainOpacity, blurPx, notificationCount } = useSettings();
   
+  const [isIkMenuOpen, setIsIkMenuOpen] = useState(false);
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+
   const grainEffectOpacity = grainOpacity / 100;
   const color = tintValue >= 0 ? '255, 255, 255' : '0, 0, 0';
   const alpha = Math.abs(tintValue) / 100;
+
+  useEffect(() => {
+    // Sayfa değiştiğinde, eğer aktif link İK menüsündeyse o menüyü aç
+    if (navLinks.some(link => pathname.startsWith(link.href))) {
+      setIsIkMenuOpen(true);
+    } else {
+      setIsIkMenuOpen(false);
+    }
+
+    // Sayfa değiştiğinde, eğer aktif link Envanter menüsündeyse o menüyü aç
+    if (inventoryLinks.some(link => pathname.startsWith(link.href))) {
+      setIsInventoryOpen(true);
+    } else {
+      setIsInventoryOpen(false);
+    }
+  }, [pathname]);
   
   return (
     <>
@@ -45,75 +71,164 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
 
       <aside 
         className={`fixed top-0 left-0 h-screen border-r border-white/10 text-white flex flex-col z-40 transition-all duration-300 ease-in-out  
-                   ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} 
+                    ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} 
                     md:translate-x-0 
                     ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
                     overflow-hidden`}
         style={{
            backgroundColor: `rgba(${color}, ${alpha})`,
-          backdropFilter: `blur(${blurPx}px)`,
+           backdropFilter: `blur(${blurPx}px)`,
         }}
+        // Hover olayları kaldırıldı
       >
         <div className="absolute inset-0 bg-[url('/noise.png')] pointer-events-none" style={{ opacity: grainEffectOpacity }} />
 
         <div className="relative z-10 flex flex-col h-full">
-          <div className="flex items-center justify-between p-4 h-[69px] border-b border-white/10">
-            <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? 'md:justify-center' : ''}`}>
-              <Building2 className="w-8 h-8 flex-shrink-0" />
-              <span className={`text-xl font-bold whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>İK Portalı</span>
-            </div>
+          {/* Logo Alanı */}
+          <div className="flex items-center justify-center p-4 h-[69px] border-b border-white/10">
+            <Image 
+              src="/sidebarlogo.png" 
+              alt="Portal Logosu" 
+              width={isCollapsed ? 32 : 124}
+              height={36} 
+              className="transition-all duration-300 my-1"
+              style={{ height: 'auto' }} 
+            />
           </div>
           
           <nav className="flex-1 p-2 overflow-y-auto">
-            <ul>
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href;
-                return (
-                  <li key={link.name} className="group relative">
-                    <Link
-                      href={link.href}
-                      onClick={() => setMobileOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-2 ${
-                        isActive ? "bg-blue-600/30 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white"}
-                         ${isCollapsed ? 'md:justify-center' : ''}`}
-                    >
-                      <link.icon className="w-5 h-5 flex-shrink-0" />
-                      <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
-                        {link.name}
-                      </span>
-                    </Link>
-                    {/* YENİ: Bildirim sayacı eklendi */}
-                    {link.name === "Bildirimler" && notificationCount > 0 && (
-                        <div className={`absolute top-2 transition-all duration-200 flex items-center justify-center text-xs font-bold text-white bg-red-600 rounded-full ${isCollapsed ? 'right-4 h-5 w-5' : 'right-4 h-6 w-6'}`}>
-                            {notificationCount}
-                        </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {profile?.role === 'admin' && (
-              <>
-                <div className={`px-4 mt-4 mb-2 text-xs font-semibold text-gray-400 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
+            {/* Ayka İK Dropdown */}
+            <div>
+              <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
+                  <button
+                      onClick={() => setIsIkMenuOpen(!isIkMenuOpen)}
+                      className={`flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-white/5 transition-colors ${isIkMenuOpen && !isCollapsed ? 'bg-white/5' : ''}`}
+                  >
+                      <div className="flex items-center gap-3">
+                        <Users size={18} />
+                        <span className="font-semibold text-sm">Ayka İnsan Kaynakları</span>
+                      </div>
+                      {isIkMenuOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+              </div>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isIkMenuOpen || isCollapsed ? 'max-h-[500px]' : 'max-h-0'}`}>
                 <ul>
-                  {adminLinks.map((link) => {
-                    const isActive = pathname === link.href;
+                  {navLinks.map((link) => {
+                    const isActive = link.href === '/dashboard' 
+                      ? pathname === link.href 
+                      : pathname.startsWith(link.href);
+
                     return (
-                      <li key={link.name} className="group">
+                      <li key={link.name} className="group relative">
                         <Link
                           href={link.href}
                           onClick={() => setMobileOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-2 ${
-                            isActive ? "bg-blue-600/30 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white"}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${
+                            isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}
                             ${isCollapsed ? 'md:justify-center' : ''}`}
                         >
-                           <link.icon className="w-5 h-5 flex-shrink-0" />
+                          <link.icon className="w-5 h-5 flex-shrink-0" />
                           <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
                             {link.name}
                           </span>
                         </Link>
+                        {link.name === "Bildirimler" && notificationCount > 0 && (
+                         <div className={`absolute top-2 transition-all duration-200 flex items-center justify-center text-xs font-bold text-white bg-red-600 rounded-full ${isCollapsed ? 'right-4 h-5 w-5' : 'right-4 h-6 w-6'}`}>
+                                {notificationCount}
+                            </div>
+                        )}
                       </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+
+            {/* Ayırıcı Çizgi */}
+            <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+
+            {/* Envanter Dropdown */}
+            <div>
+              <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
+                  <button
+                      onClick={() => setIsInventoryOpen(!isInventoryOpen)}
+                      className={`flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-white/5 transition-colors ${isInventoryOpen && !isCollapsed ? 'bg-white/5' : ''}`}
+                  >
+                      <div className="flex items-center gap-3">
+                        <Archive size={18} />
+                        <span className="font-semibold text-sm">Envanter</span>
+                      </div>
+                      {isInventoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+              </div>
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isInventoryOpen || isCollapsed ? 'max-h-[500px]' : 'max-h-0'}`}>
+                <ul>
+                    {inventoryLinks.map((link) => {
+                      const isActive = pathname.startsWith(link.href);
+                      return (
+                        <li key={link.name} className="group relative">
+                          <Link
+                            href={link.href}
+                            onClick={() => setMobileOpen(false)}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${
+                              isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}
+                              ${isCollapsed ? 'md:justify-center' : ''}`}
+                          >
+                            <link.icon className="w-5 h-5 flex-shrink-0" />
+                            <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                              {link.name}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            </div>
+
+             {/* Ayırıcı Çizgi */}
+             <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+
+            {/* Feedback Linki */}
+            <ul>
+                <li className="group relative">
+                    <Link
+                        href={feedbackLink.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${
+                        pathname.startsWith(feedbackLink.href) ? "bg-blue-600/30 text-white" : "text-white hover:bg-white/5"}
+                        ${isCollapsed ? 'md:justify-center' : ''}`}
+                    >
+                        <feedbackLink.icon className="w-5 h-5 flex-shrink-0" />
+                        <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                        {feedbackLink.name}
+                        </span>
+                    </Link>
+                </li>
+            </ul>
+
+            {/* Yönetim Linkleri */}
+            {profile?.role === 'admin' && (
+              <>
+                <div className={`px-4 mt-4 mb-2 text-xs font-semibold text-gray-200 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
+                <ul>
+                   {adminLinks.map((link) => {
+                    const isActive = pathname.startsWith(link.href);
+                    return (
+                      <li key={link.name} className="group">
+                         <Link
+                          href={link.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${
+                             isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}
+                            ${isCollapsed ? 'md:justify-center' : ''}`}
+                        >
+                          <link.icon className="w-5 h-5 flex-shrink-0" />
+                          <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                            {link.name}
+                          </span>
+                        </Link>
+                       </li>
                     );
                   })}
                 </ul>
@@ -121,6 +236,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
             )}
           </nav>
           
+          {/* Tuş işlevselliği geri getirildi */}
           <div className="p-4 border-t border-white/10">
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)} 
