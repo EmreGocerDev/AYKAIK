@@ -131,3 +131,22 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
     transform: rotate(360deg);
   }
 }
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: #34D399; /* Tailwind green-400 */ }
+}
+
+.typing-cursor {
+  border-right: 0.15em solid #34D399; /* Yeşil bir imleç */
+  animation: blink-caret .75s step-end infinite;
+}
+
+.typing-code {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2rem;
+  line-height: 1.5;
+  width: 100%; /* Metnin tamamını kaplaması için */
+}
