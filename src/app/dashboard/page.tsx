@@ -1,5 +1,5 @@
 "use client";
-
+import { WiDaySunny, WiNightClear, WiCloudy, WiRain, WiSnow, WiThunderstorm } from 'react-icons/wi';
 // *** YENİ: Gerekli import'lar eklendi ***
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
@@ -9,10 +9,11 @@ import { useSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../contexts/Settings
 import { 
     Briefcase, CalendarCheck, Clock, UserCheck, Users, 
     PieChart, TrendingUp, UserX, Building, GripVertical,
-    RefreshCw, UserPlus, UserCog, Hourglass
+    RefreshCw, UserPlus, UserCog, Hourglass, MapPin, Edit 
 } from "lucide-react";
 // import { Responsive, WidthProvider } from 'react-grid-layout'; // Eski import satırı kaldırıldı
 import type { Layout } from 'react-grid-layout';
+import toast from 'react-hot-toast';
 
 // *** YENİ: react-grid-layout kütüphanesi sadece tarayıcıda yüklenecek şekilde ayarlandı ***
 // ssr: false -> Bu kütüphanenin sunucuda çalışmasını engeller.
@@ -103,35 +104,131 @@ const SimpleBarChart = ({ data, title }: { data: { name: string; count: number }
     );
 };
 
-const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: string} | null, glassCardProps: { tintValue: number; blurPx: number; borderRadiusPx: number; grainOpacity: number; } }) => {
+// GÜNCELLENMİŞ ve YENİ ÖZELLİKLER EKLENMİŞ WELCOMEWIDGET
+// src/app/dashboard/page.tsx
+
+// ... (importlar ve diğer tipler burada)
+
+// YENİ: SADECE KARŞILAMA, SAAT VE TARİH İÇİN WIDGET
+const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: string} | null, glassCardProps: any }) => {
     const [time, setTime] = useState(new Date());
+
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    const greetings = [ "Merhaba", "Hoş geldiniz", "İyi çalışmalar", "Harika bir gün dilerim" ];
     const getGreeting = () => {
         const hour = time.getHours();
-        if (hour < 12) return "Günaydın";
-        if (hour < 18) return "İyi Günler";
-        return "İyi Akşamlar";
+        if (hour < 5) return "İyi geceler"; if (hour < 12) return "Günaydın";
+        if (hour < 18) return "İyi günler"; return "İyi akşamlar";
     };
+    const randomGreeting = useMemo(() => greetings[Math.floor(Math.random() * greetings.length)], []);
+
     return (
         <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center items-center text-center">
             <h2 className="text-3xl font-bold">{getGreeting()}, {profile?.full_name?.split(' ')[0]}!</h2>
-            <p className="text-5xl font-mono font-bold mt-2 tracking-wider">
-                {time.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            <p className="text-gray-300">{randomGreeting}</p>
+            <p className="text-6xl font-sans font-thin mt-2 tracking-wider">
+                {time.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
             </p>
-            <p className="text-lg text-gray-300 mt-1">
+            <p className="text-lg text-gray-300 mt-2">
                 {time.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
         </GlassCard>
     );
 };
 
-// =================================================================================
-// ANA DASHBOARD BİLEŞENİ
-// =================================================================================
+// YENİ: SADECE HAVA DURUMU İÇİN WIDGET
+const WeatherWidget = ({ glassCardProps }: { glassCardProps: any }) => {
+    const [weather, setWeather] = useState<{ temp: number; description: string; icon: string } | null>(null);
+    const [city, setCity] = useState<string | null>(null);
+    const [isEditingLocation, setIsEditingLocation] = useState<boolean>(false);
+    const [manualCityInput, setManualCityInput] = useState<string>("");
 
+    const weatherIconMap: { [key: string]: React.ReactNode } = {
+        '01d': <WiDaySunny size={64} />, '01n': <WiNightClear size={64} />, '02d': <WiCloudy size={64} />, 
+        '02n': <WiCloudy size={64} />, '03d': <WiCloudy size={64} />, '03n': <WiCloudy size={64} />,
+        '04d': <WiCloudy size={64} />, '04n': <WiCloudy size={64} />, '09d': <WiRain size={64} />, 
+        '09n': <WiRain size={64} />, '10d': <WiRain size={64} />, '10n': <WiRain size={64} />,
+        '11d': <WiThunderstorm size={64} />, '11n': <WiThunderstorm size={64} />, '13d': <WiSnow size={64} />, 
+        '13n': <WiSnow size={64} />, '50d': <WiCloudy size={64} />, '50n': <WiCloudy size={64} />,
+    };
+
+    const fetchWeather = async (query: {lat: number, lon: number} | {city: string}) => {
+        const API_KEY = 'f8c9acc4fdb3f8cf93dd6630bd46e8df';
+        let url = '';
+        if ('city' in query) {
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${query.city}&appid=${API_KEY}&units=metric&lang=tr`;
+        } else {
+            url = `https://api.openweathermap.org/data/2.5/weather?lat=${query.lat}&lon=${query.lon}&appid=${API_KEY}&units=metric&lang=tr`;
+        }
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (response.ok && data.weather && data.main) {
+                setWeather({ temp: Math.round(data.main.temp), description: data.weather[0].description, icon: data.weather[0].icon });
+                setCity(data.name); setManualCityInput(data.name);
+            } else { toast.error(`Hava durumu alınamadı: ${data.message || 'Bilinmeyen API hatası'}`); }
+        } catch (err) { toast.error("Hava durumu sunucusuna bağlanılamadı."); }
+    };
+
+    useEffect(() => {
+        navigator.geolocation.getCurrentPosition(
+            (position) => fetchWeather({ lat: position.coords.latitude, lon: position.coords.longitude }),
+            () => { toast.error(`Konum izni alınamadı, varsayılan olarak İstanbul gösteriliyor.`); fetchWeather({ city: 'Istanbul' }); }
+        );
+    }, []);
+
+    const handleCitySubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (manualCityInput.trim()) {
+            fetchWeather({ city: manualCityInput.trim() });
+            setIsEditingLocation(false);
+        } else { toast.error("Lütfen bir şehir adı girin."); }
+    };
+
+    return (
+        <GlassCard {...glassCardProps} className="h-full flex flex-col justify-between text-center">
+            {!weather ? (
+                 <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                    Hava durumu bilgisi yükleniyor...
+                </div>
+            ) : (
+                <>
+                    <div className="flex-1 flex flex-col justify-center items-center">
+                        {weatherIconMap[weather.icon]}
+                        <p className="text-5xl font-bold mt-2">{weather.temp}°C</p>
+                        <p className="text-lg text-gray-300 capitalize">{weather.description}</p>
+                    </div>
+                    <div className="w-full text-center pt-2 border-t border-white/10">
+                        <div className="w-full flex justify-center items-center gap-2">
+                            <MapPin size={16} className="text-gray-400" />
+                            {!isEditingLocation ? (
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-lg">{city}</span>
+                                    <button onClick={() => setIsEditingLocation(true)} className="p-1 rounded-full hover:bg-white/10" title="Şehri Değiştir">
+                                        <Edit size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleCitySubmit} className="flex items-center gap-2">
+                                    <input
+                                        type="text" value={manualCityInput} onChange={(e) => setManualCityInput(e.target.value)}
+                                        className="bg-black/20 text-white text-center rounded-md px-2 py-1 border border-white/20 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500" autoFocus
+                                    />
+                                    <button type="submit" className="p-1 rounded-full bg-green-600 hover:bg-green-700 text-white">Kaydet</button>
+                                    <button type="button" onClick={() => setIsEditingLocation(false)} className="p-1 rounded-full bg-red-600 hover:bg-red-700 text-white">İptal</button>
+                                </form>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
+        </GlassCard>
+    );
+};
 export default function DashboardPage() {
   const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, dashboardLayout, setDashboardLayout } = useSettings();
   const [loading, setLoading] = useState(true);
@@ -298,6 +395,7 @@ export default function DashboardPage() {
         upcomingLeaves: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><TrendingUp size={18}/> Yaklaşan İzinler</h3><div className="space-y-2 overflow-y-auto flex-1">{data.upcomingLeaves.length > 0 ? data.upcomingLeaves.map(leave => (<div key={leave.id} className="bg-white/5 p-3 rounded-lg text-sm"><div className="flex justify-between items-center"><p className="font-semibold truncate pr-2">{leave.personnel?.full_name}</p><p className="text-xs text-gray-300 font-medium whitespace-nowrap">{new Date(leave.start_date.replace(/-/g, '/')).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}</p></div></div>)) : <p className="text-gray-400 text-center py-4">Yaklaşan izin bulunmuyor.</p>}</div></GlassCard>),
         leaveTypeDistribution: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><SimpleBarChart data={data.leaveTypeDistribution} title="İzin Türü Dağılımı" /></GlassCard>),
         welcome: <WelcomeWidget profile={profile} glassCardProps={glassCardProps} />,
+        weather: <WeatherWidget glassCardProps={glassCardProps} />,
         quickActions: (
             <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center">
                 <div className="flex flex-row items-center justify-center gap-4 flex-wrap">
