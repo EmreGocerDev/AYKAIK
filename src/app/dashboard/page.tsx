@@ -1,6 +1,5 @@
 "use client";
-import { WiDaySunny, WiNightClear, WiCloudy, WiRain, WiSnow, WiThunderstorm } from 'react-icons/wi';
-// *** YENİ: Gerekli import'lar eklendi ***
+
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -9,45 +8,33 @@ import { useSettings, DEFAULT_DASHBOARD_SETTINGS } from "../../contexts/Settings
 import { 
     Briefcase, CalendarCheck, Clock, UserCheck, Users, 
     PieChart, TrendingUp, UserX, Building, GripVertical,
-    RefreshCw, UserPlus, UserCog, Hourglass, MapPin, Edit 
+    RefreshCw, UserPlus, UserCog, Hourglass, MapPin, Edit
 } from "lucide-react";
-// import { Responsive, WidthProvider } from 'react-grid-layout'; // Eski import satırı kaldırıldı
 import type { Layout } from 'react-grid-layout';
+import { WiDaySunny, WiNightClear, WiCloudy, WiRain, WiSnow, WiThunderstorm } from 'react-icons/wi';
 import toast from 'react-hot-toast';
 
-// *** YENİ: react-grid-layout kütüphanesi sadece tarayıcıda yüklenecek şekilde ayarlandı ***
-// ssr: false -> Bu kütüphanenin sunucuda çalışmasını engeller.
-// loading -> Kütüphane yüklenirken ekranda ne gösterileceğini belirtir.
 const ResponsiveGridLayout = dynamic(
     () => import('react-grid-layout').then(mod => mod.WidthProvider(mod.Responsive)),
     { 
         ssr: false,
-        loading: () => (
-            <div className="min-h-screen flex items-center justify-center text-white text-xl">
-                Dashboard Yükleniyor...
-            </div>
-        )
+        loading: () => <div className="min-h-screen flex items-center justify-center text-white text-xl">Dashboard Yükleniyor...</div>
     }
 );
 
-
-// =================================================================================
-// TİPLER VE YARDIMCI BİLEŞENLER
-// =================================================================================
-
-type UpcomingLeave = {
-  id: number;
-  start_date: string;
-  personnel: { full_name: string } | null;
+// DÜZELTME 1: 'any' yerine kullanılacak olan net tip tanımı
+type GlassCardProps = {
+    tintValue: number;
+    blurPx: number;
+    borderRadiusPx: number;
+    grainOpacity: number;
 };
 
-type AwaitingApprovalRequest = {
-    id: number;
-    personnel_full_name: string;
-    leave_type: string;
-    status: string;
-};
-
+// =================================================================================
+// TİPLER VE YARDIMCI BİLEŞENLER (Bu bölümü kendi dosyanızdaki gibi bırakın)
+// =================================================================================
+type UpcomingLeave = { id: number; start_date: string; personnel: { full_name: string } | null; };
+type AwaitingApprovalRequest = { id: number; personnel_full_name: string; leave_type: string; status: string; };
 type DashboardData = {
   stats: {
     pendingCount: number;
@@ -90,27 +77,26 @@ const SimpleBarChart = ({ data, title }: { data: { name: string; count: number }
             <div className="space-y-3 text-sm">
                 {data.map((item, index) => (
                     <div key={item.name}>
-                         <div className="flex justify-between mb-1">
+                        <div className="flex justify-between mb-1">
                             <span className="capitalize font-medium text-gray-300">{item.name}</span>
                             <span className="font-bold">{item.count}</span>
                         </div>
-                         <div className="w-full bg-gray-700/50 rounded-full h-2.5">
+                        <div className="w-full bg-gray-700/50 rounded-full h-2.5">
                             <div className={`${colors[index % colors.length]} h-2.5 rounded-full`} style={{ width: `${(item.count / total) * 100}%` }}></div>
                         </div>
-                     </div>
+                    </div>
                 ))}
             </div>
         </div>
     );
 };
 
-// GÜNCELLENMİŞ ve YENİ ÖZELLİKLER EKLENMİŞ WELCOMEWIDGET
-// src/app/dashboard/page.tsx
 
-// ... (importlar ve diğer tipler burada)
+// =================================================================================
+// YARDIMCI WIDGET'LARIN TANIMLANMASI
+// =================================================================================
 
-// YENİ: SADECE KARŞILAMA, SAAT VE TARİH İÇİN WIDGET
-const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: string} | null, glassCardProps: any }) => {
+const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: string} | null, glassCardProps: GlassCardProps }) => {
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -124,7 +110,8 @@ const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: strin
         if (hour < 5) return "İyi geceler"; if (hour < 12) return "Günaydın";
         if (hour < 18) return "İyi günler"; return "İyi akşamlar";
     };
-    const randomGreeting = useMemo(() => greetings[Math.floor(Math.random() * greetings.length)], []);
+    // DÜZELTME 2: 'greetings' bağımlılık dizisine eklendi
+    const randomGreeting = useMemo(() => greetings[Math.floor(Math.random() * greetings.length)], [greetings]);
 
     return (
         <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center items-center text-center">
@@ -140,8 +127,8 @@ const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: strin
     );
 };
 
-// YENİ: SADECE HAVA DURUMU İÇİN WIDGET
-const WeatherWidget = ({ glassCardProps }: { glassCardProps: any }) => {
+// DÜZELTME 3: 'any' yerine oluşturduğumuz tip kullanıldı
+const WeatherWidget = ({ glassCardProps }: { glassCardProps: GlassCardProps }) => {
     const [weather, setWeather] = useState<{ temp: number; description: string; icon: string } | null>(null);
     const [city, setCity] = useState<string | null>(null);
     const [isEditingLocation, setIsEditingLocation] = useState<boolean>(false);
@@ -157,7 +144,7 @@ const WeatherWidget = ({ glassCardProps }: { glassCardProps: any }) => {
     };
 
     const fetchWeather = async (query: {lat: number, lon: number} | {city: string}) => {
-        const API_KEY = 'f8c9acc4fdb3f8cf93dd6630bd46e8df';
+        const API_KEY = 'KENDI_API_ANAHTARINIZ_BURADA_YAZILI_OLMALI'; // API Anahtarınızı buraya yazın
         let url = '';
         if ('city' in query) {
             url = `https://api.openweathermap.org/data/2.5/weather?q=${query.city}&appid=${API_KEY}&units=metric&lang=tr`;
@@ -171,13 +158,20 @@ const WeatherWidget = ({ glassCardProps }: { glassCardProps: any }) => {
                 setWeather({ temp: Math.round(data.main.temp), description: data.weather[0].description, icon: data.weather[0].icon });
                 setCity(data.name); setManualCityInput(data.name);
             } else { toast.error(`Hava durumu alınamadı: ${data.message || 'Bilinmeyen API hatası'}`); }
-        } catch (err) { toast.error("Hava durumu sunucusuna bağlanılamadı."); }
+        } catch (err) { 
+            // DÜZELTME 4: Yakalanan hata konsola yazdırıldı
+            console.error("Hava durumu verisi çekilirken bir hata oluştu:", err);
+            toast.error("Hava durumu sunucusuna bağlanılamadı."); 
+        }
     };
 
     useEffect(() => {
         navigator.geolocation.getCurrentPosition(
             (position) => fetchWeather({ lat: position.coords.latitude, lon: position.coords.longitude }),
-            () => { toast.error(`Konum izni alınamadı, varsayılan olarak İstanbul gösteriliyor.`); fetchWeather({ city: 'Istanbul' }); }
+            () => { 
+                toast.error(`Konum izni alınamadı, varsayılan olarak İstanbul gösteriliyor.`); 
+                fetchWeather({ city: 'Istanbul' }); 
+            }
         );
     }, []);
 
@@ -229,6 +223,12 @@ const WeatherWidget = ({ glassCardProps }: { glassCardProps: any }) => {
         </GlassCard>
     );
 };
+
+
+// =================================================================================
+// ANA DASHBOARD SAYFA BİLEŞENİ
+// =================================================================================
+
 export default function DashboardPage() {
   const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, dashboardLayout, setDashboardLayout } = useSettings();
   const [loading, setLoading] = useState(true);
@@ -288,7 +288,6 @@ export default function DashboardPage() {
             const awaitingFinalPromise = profile.role === 'admin' ? supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'approved_by_coordinator') : Promise.resolve({ data: null, error: null, count: 0 });
             const regionsPromise = profile.role === 'admin' ? supabase.from('regions').select('id', { count: 'exact', head: true }) : Promise.resolve({ data: null, error: null, count: 0 });
             const awaitingApprovalPromise = supabase.rpc('get_notifications', { user_role: profile.role, user_region_id: profile.region_id });
-            
             const [
                 pendingResult, approvedResult, personnelResult, onLeaveQueryRes, recentResult,
                 upcomingResult, leaveTypeResult, awaitingFinalResult, regionsResult, awaitingApprovalResult
@@ -310,17 +309,12 @@ export default function DashboardPage() {
             }
             
             const leaveTypeDistribution = Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-            
-            // *** GÜNCELLENDİ: Hatalı tarih formatını düzeltecek replace eklendi ***
             const upcomingData = upcomingResult.data || [];
-            // GÜNCELLENDİ: 'any' tipi kaldırılarak doğru tip tanımı yapıldı ve 
-            // Supabase'den dizi olarak gelen personel verisinin ilk elemanı alındı.
             const transformedUpcomingLeaves = upcomingData.map((item: { id: number; start_date: string; personnel: { full_name: string; }[] | null }) => ({
                 id: item.id,
                 start_date: item.start_date,
                 personnel: (item.personnel && item.personnel.length > 0) ? item.personnel[0] : null
             }));
-
             setData({
                 stats: {
                     pendingCount: pendingResult.count ?? 0,
@@ -334,8 +328,7 @@ export default function DashboardPage() {
                 upcomingLeaves: transformedUpcomingLeaves,
                 leaveTypeDistribution: leaveTypeDistribution,
             } as DashboardData);
-        } catch (error) { console.error("Dashboard verileri çekilirken hata oluştu:", error);
-        } 
+        } catch (error) { console.error("Dashboard verileri çekilirken hata oluştu:", error); } 
         finally { setLoading(false); }
     };
     if (profile) { fetchDashboardData(); }
@@ -362,20 +355,20 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0">
                 <Hourglass size={18}/> Onay Bekleyen Talepler
              </h3>
-            <div className="space-y-2 overflow-y-auto flex-1">
+             <div className="space-y-2 overflow-y-auto flex-1">
                 {awaitingApprovalData.length > 0 ? (
                     awaitingApprovalData.slice(0, 5).map(req => (
                         <Link href="/dashboard/notifications" key={req.id} className="block bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-colors">
                             <div className="flex justify-between items-center text-sm">
-                                 <p className="font-semibold truncate pr-2">{req.personnel_full_name}</p>
+                                <p className="font-semibold truncate pr-2">{req.personnel_full_name}</p>
                                 <span className="text-xs text-gray-400 capitalize">{req.leave_type}</span>
                             </div>
-                         </Link>
+                        </Link>
                     ))
                 ) : (
                     <p className="text-gray-400 text-center py-4">İşlem bekleyen talep yok.</p>
                 )}
-             </div>
+            </div>
             {awaitingApprovalData.length > 5 && (
                 <Link href="/dashboard/notifications" className="text-center text-sm mt-4 text-blue-400 hover:underline">
                     Tümünü Gör ({awaitingApprovalData.length})
@@ -385,6 +378,8 @@ export default function DashboardPage() {
      );
 
     return {
+        welcome: <WelcomeWidget profile={profile} glassCardProps={glassCardProps} />,
+        weather: <WeatherWidget glassCardProps={glassCardProps} />,
         pending: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-yellow-500/10"><Briefcase size={24} className="text-yellow-400" /></div><div><p className="text-3xl font-bold text-yellow-400">{data.stats.pendingCount}</p><p className="text-sm text-gray-400">Bekleyen Talep</p></div></div></GlassCard>,
         approvedThisMonth: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-green-500/10"><CalendarCheck size={24} className="text-green-400" /></div><div><p className="text-3xl font-bold text-green-400">{data.stats.approvedThisMonthCount}</p><p className="text-sm text-gray-400">Bu Ay Onaylanan</p></div></div></GlassCard>,
         onLeaveToday: <GlassCard {...glassCardProps} className="h-full flex flex-col"><div className="flex items-center gap-4"><div className="p-3 rounded-lg bg-sky-500/10"><UserCheck size={24} className="text-sky-400" /></div><div><p className="text-3xl font-bold text-sky-400">{data.stats.onLeaveTodayCount}</p><p className="text-sm text-gray-400">Bugün İzinli</p></div></div></GlassCard>,
@@ -394,17 +389,15 @@ export default function DashboardPage() {
         recentRequests: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><Clock size={18}/> Son Talepler</h3><div className="space-y-2 overflow-y-auto flex-1">{data.recentRequests.length > 0 ? data.recentRequests.map(req => (<Link href="/dashboard/requests" key={req.id} className="block bg-white/5 p-3 rounded-lg hover:bg-white/10 transition-colors"><div className="flex justify-between items-center text-sm"><p className="font-semibold truncate pr-2">{req.personnel_full_name}</p><span className={`font-semibold px-2 py-0.5 rounded-full border text-xs whitespace-nowrap ${statusColors[req.status] || 'text-gray-400'}`}>{statusTranslations[req.status] || req.status}</span></div><p className="text-xs text-gray-400 capitalize">{req.leave_type}</p></Link>)) : <p className="text-gray-400 text-center py-4">Yeni talep yok.</p>}</div></GlassCard>),
         upcomingLeaves: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><h3 className="text-lg font-semibold mb-4 flex items-center gap-2 flex-shrink-0"><TrendingUp size={18}/> Yaklaşan İzinler</h3><div className="space-y-2 overflow-y-auto flex-1">{data.upcomingLeaves.length > 0 ? data.upcomingLeaves.map(leave => (<div key={leave.id} className="bg-white/5 p-3 rounded-lg text-sm"><div className="flex justify-between items-center"><p className="font-semibold truncate pr-2">{leave.personnel?.full_name}</p><p className="text-xs text-gray-300 font-medium whitespace-nowrap">{new Date(leave.start_date.replace(/-/g, '/')).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}</p></div></div>)) : <p className="text-gray-400 text-center py-4">Yaklaşan izin bulunmuyor.</p>}</div></GlassCard>),
         leaveTypeDistribution: (<GlassCard {...glassCardProps} className="h-full flex flex-col"><SimpleBarChart data={data.leaveTypeDistribution} title="İzin Türü Dağılımı" /></GlassCard>),
-        welcome: <WelcomeWidget profile={profile} glassCardProps={glassCardProps} />,
-        weather: <WeatherWidget glassCardProps={glassCardProps} />,
         quickActions: (
             <GlassCard {...glassCardProps} className="h-full flex flex-col justify-center">
                 <div className="flex flex-row items-center justify-center gap-4 flex-wrap">
                     <Link href="/dashboard/personnel" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
-                         <UserPlus className="w-8 h-8 text-blue-400" />
+                        <UserPlus className="w-8 h-8 text-blue-400" />
                         <span className="text-xs font-semibold mt-2">Personel Ekle</span>
                     </Link>
                     <Link href="/dashboard/requests" className="flex flex-col items-center justify-center bg-white/5 rounded-lg p-3 text-center hover:bg-white/10 transition-colors w-20 h-20 sm:w-24 sm:h-24">
-                         <Briefcase className="w-8 h-8 text-green-400" />
+                        <Briefcase className="w-8 h-8 text-green-400" />
                         <span className="text-xs font-semibold mt-2">İzinleri Görüntüle</span>
                     </Link>
                     {profile?.role === 'admin' && (
@@ -456,7 +449,6 @@ export default function DashboardPage() {
     if (profile?.role !== 'admin' && ['awaitingFinal', 'totalRegions', 'leaveStatusDistribution'].includes(key)) return false;
     return true;
   });
-  
   return (
     <div className="w-full min-h-screen p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -464,37 +456,37 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold text-white">Ayka Enerji İnsan Kaynakları Kokpiti</h1>
-                 </div>
+                </div>
                 <button
                     onClick={() => setDashboardLayout(DEFAULT_DASHBOARD_SETTINGS)}
                     className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
                     title="Paneli Sıfırla"
-                 >
+                >
                     <RefreshCw size={16} />
                     <span>Sıfırla</span>
                 </button>
             </div>
         </div>
         
-        <ResponsiveGridLayout
+         <ResponsiveGridLayout
            className="layout"
             layouts={dashboardLayout.layouts}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
             rowHeight={50}
             onLayoutChange={handleLayoutChange}
-           isDraggable={true}
+            isDraggable={true}
             isResizable={true}
             draggableHandle=".drag-handle"
             isBounded={true}
         >
             {visibleWidgets.map(key => (
                 <div key={key} className="relative group bg-transparent">
-                     <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
+                    <div className="drag-handle absolute top-2 right-2 p-2 text-white/40 group-hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors z-10">
                         <GripVertical />
                     </div>
                     <div className="h-full w-full">
-                         {allWidgets[key as keyof typeof allWidgets]}
+                        {allWidgets[key as keyof typeof allWidgets]}
                     </div>
                 </div>
             ))}
