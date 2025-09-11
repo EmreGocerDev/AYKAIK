@@ -116,6 +116,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   useEffect(() => {
     const unlockAudio = () => {
         if (audioContext && audioContext.state === 'suspended') {
@@ -133,6 +134,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         document.removeEventListener('keydown', unlockAudio);
     };
   }, [audioContext]);
+
   useEffect(() => {
     const fetchInitialData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -195,47 +197,68 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }).subscribe();
       return () => { supabase.removeChannel(profileChannel); };
     }
-  
   }, [user]);
   
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
     updateUserDashboardLayout(newLayout);
   };
+
   useEffect(() => {
-    if (typeof window === 'undefined' || !user || !profile) { return; }
+    // Tarayıcı ortamı kontrolleri
+    if (typeof window === 'undefined' || !('Notification' in window) || !user || !profile) {
+      return;
+    }
+
     if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
       Notification.requestPermission().then(permission => {
         if (permission === 'granted') { toast.success('Bildirimlere izin verildi!'); }
       });
     }
-    
+
+    // Sağlamlaştırılmış ses çalma ve bildirim gösterme fonksiyonu
     const showNotification = (title: string, options: NotificationOptions) => {
-      if (Notification.permission === 'granted') {
-        if (notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running') {
+      if (Notification.permission !== 'granted') return;
+
+      let canPlaySound = notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running';
+
+      if (canPlaySound) {
+        try {
           const notificationSound = new Audio(notificationSoundUrl);
-          notificationSound.play().catch(error => {
-            console.error("Özel bildirim sesi çalınamadı (tarayıcı etkileşim izni bekliyor olabilir):", error);
-          });
+          const playPromise = notificationSound.play();
+
+          if (playPromise !== undefined) {
+            playPromise.catch(error => {
+              console.error("Bildirim sesi çalma hatası (tarayıcı engellemiş olabilir):", error);
+              // Ses çalınamazsa, bir sonraki deneme için context'i yeniden başlatmayı dene
+              audioContext?.resume();
+            });
+          }
+          // Görsel bildirimi, sesin çalmasını beklemeden göster
           new Notification(title, { ...options, silent: true });
-        } else {
-          
-          new Notification(title, { ...options, silent: notificationSoundUrl === 'none' });
+        } catch (e) {
+          console.error("Audio nesnesi oluşturulurken veya çalınırken hata:", e);
+          // Hata durumunda sessiz bildirim göster
+          new Notification(title, { ...options, silent: true });
         }
+      } else {
+        // Ses çalınamayacaksa, normal bildirim göster
+        new Notification(title, { ...options, silent: notificationSoundUrl === 'none' });
       }
     };
+    
     const channel = supabase.channel('leave-request-notifications').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, async (payload) => {
-      
       const { data: count, error } = await supabase.rpc('get_notification_count', { user_role: profile.role, user_region_id: profile.region_id });
       if (!error) { setNotificationCount(count); }
+
       if (payload.eventType === 'INSERT' && profile.role === 'coordinator') {
         const newRequest = payload.new as { personnel_id: number };
         const { data: personnel } = await supabase.from('personnel').select('region_id, full_name').eq('id', newRequest.personnel_id).single();
-  
         if (personnel && personnel.region_id === profile.region_id) {
           showNotification('Yeni İzin Talebi', { body: `${personnel.full_name} yeni bir izin talebinde bulundu.`, icon: '/favicon.ico' });
         }
       }
+
       if (payload.eventType === 'UPDATE' && profile.role === 'admin') {
         const updatedRequest = payload.new as { status: string, personnel_id: number };
         const oldRequest = payload.old as { status: string };
@@ -249,7 +272,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }).subscribe();
       
     return () => { supabase.removeChannel(channel); };
-  }, [user, profile, notificationSoundUrl, audioContext]);
+  }, [user, profile, notificationSoundUrl, audioContext, supabase, setNotificationCount]);
 
   const value = {
     supabase,
@@ -268,6 +291,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     notificationSoundUrl,
     setNotificationSoundUrl,
   };
+  
   return (
     <SettingsContext.Provider value={value}>
       {children}
