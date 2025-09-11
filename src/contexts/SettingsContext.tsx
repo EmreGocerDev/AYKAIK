@@ -96,7 +96,6 @@ type SettingsContextType = {
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
-
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -117,7 +116,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
   useEffect(() => {
     const unlockAudio = () => {
         if (audioContext && audioContext.state === 'suspended') {
@@ -135,7 +133,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         document.removeEventListener('keydown', unlockAudio);
     };
   }, [audioContext]);
-
   useEffect(() => {
     const fetchInitialData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -146,6 +143,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           supabase.from("user_settings").select("*").eq("user_id", user.id).single(),
           supabase.from("system_settings").select("value").eq("key", "weekend_configuration").single()
         ]);
+  
         if (profileRes.data) {
             setProfile(profileRes.data);
             const { data: count, error } = await supabase.rpc('get_notification_count', {
@@ -197,13 +195,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }).subscribe();
       return () => { supabase.removeChannel(profileChannel); };
     }
+  
   }, [user]);
   
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
     updateUserDashboardLayout(newLayout);
   };
-  
   useEffect(() => {
     if (typeof window === 'undefined' || !user || !profile) { return; }
     if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -221,11 +219,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           });
           new Notification(title, { ...options, silent: true });
         } else {
+          
           new Notification(title, { ...options, silent: notificationSoundUrl === 'none' });
         }
       }
     };
-    
     const channel = supabase.channel('leave-request-notifications').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, async (payload) => {
       
       const { data: count, error } = await supabase.rpc('get_notification_count', { user_role: profile.role, user_region_id: profile.region_id });
@@ -233,6 +231,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       if (payload.eventType === 'INSERT' && profile.role === 'coordinator') {
         const newRequest = payload.new as { personnel_id: number };
         const { data: personnel } = await supabase.from('personnel').select('region_id, full_name').eq('id', newRequest.personnel_id).single();
+  
         if (personnel && personnel.region_id === profile.region_id) {
           showNotification('Yeni İzin Talebi', { body: `${personnel.full_name} yeni bir izin talebinde bulundu.`, icon: '/favicon.ico' });
         }
@@ -269,7 +268,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     notificationSoundUrl,
     setNotificationSoundUrl,
   };
-  
   return (
     <SettingsContext.Provider value={value}>
       {children}

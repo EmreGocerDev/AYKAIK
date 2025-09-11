@@ -85,9 +85,7 @@ export async function login(prevState: LoginState, formData: FormData) {
     password,
   });
   if (error) {
-    if (typeof window !== "undefined") {
-      alert(JSON.stringify(error, null, 2));
-    }
+    
     return {
       message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
     };
