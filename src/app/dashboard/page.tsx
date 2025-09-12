@@ -463,7 +463,7 @@ export default function DashboardPage() {
         <div className="mb-8">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl md:text-4xl font-bold text-white">Ayka Enerji İnsan Kaynakları Kokpiti</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white">AYKA MATRİX KOKPİT</h1>
                 </div>
                 <button
                     onClick={() => setDashboardLayout(DEFAULT_DASHBOARD_SETTINGS)}

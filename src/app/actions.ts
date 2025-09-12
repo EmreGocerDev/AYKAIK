@@ -7,6 +7,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // GÜNCELLEME: Güvenli tarih fonksiyonumuzu import ediyoruz.
 import { safeNewDate } from '@/lib/utils';
 
+import { createPerformanceClient } from '@/lib/supabase/performance';
+import type { DailyPerformanceRecord } from '@/types/index';
+
 type GridLayoutItem = {
   i: string;
   x: number;
@@ -605,4 +608,59 @@ export async function updateUserDashboardLayout(layout: DashboardLayoutSettings)
 
   revalidatePath('/dashboard');
   return { success: true };
+}
+// Bölgeye göre dinamik tablo adı oluşturan yardımcı fonksiyon
+// Bölgeye göre dinamik tablo adı oluşturan yardımcı fonksiyon
+const getTableNameForRegion = (regionName: string) => {
+    // Gelen bölge adını her zaman küçük harfe çevirerek karşılaştıralım
+    const lowerCaseRegionName = regionName.toLowerCase();
+
+    // Samsun bölgesi için özel durum kontrolü
+    if (lowerCaseRegionName === 'samsun') {
+        return 'performance_logs';
+    }
+
+    // Diğer tüm bölgeler için genel kural devam ediyor
+    const sanitizedName = lowerCaseRegionName
+        .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+        .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+        .replace(/\s+/g, '_');
+    return `performance_logs_${sanitizedName}`;
+};
+// 1. Fonksiyon: Seçili bölgedeki mevcut log tarihlerini çeker
+export async function getAvailablePerformanceDates(regionName: string): Promise<{ success: boolean; data?: string[]; message?: string; }> {
+    "use server";
+    if (!regionName) return { success: false, message: "Bölge adı belirtilmedi." };
+    const performanceSupabase = createPerformanceClient();
+    const tableName = getTableNameForRegion(regionName);
+    try {
+        const { data, error } = await performanceSupabase.from(tableName).select('log_date').order('log_date', { ascending: false });
+        if (error) throw error;
+        return { success: true, data: data.map(item => item.log_date) };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Bilinmeyen bir hata oluştu.';
+        return { success: false, message: `Tarihler çekilirken hata: ${message}` };
+    }
+}
+// 2. Fonksiyon: Seçili bölge ve tarihe ait JSON verisini çeker
+export async function getPerformanceDataForDateRange(regionName: string, startDate: string, endDate: string): Promise<{ success: boolean; data?: { log_date: string, data: DailyPerformanceRecord[] }[]; message?: string; }> {
+    "use server";
+    if (!regionName || !startDate || !endDate) return { success: false, message: "Bölge veya tarih aralığı belirtilmedi." };
+    const performanceSupabase = createPerformanceClient();
+    const tableName = getTableNameForRegion(regionName);
+    try {
+        const { data, error } = await performanceSupabase
+            .from(tableName)
+            .select('log_date, data')
+            .gte('log_date', startDate)
+            .lte('log_date', endDate)
+            .order('log_date', { ascending: true });
+
+        if (error) throw error;
+        
+        return { success: true, data: data as { log_date: string, data: DailyPerformanceRecord[] }[] };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Bilinmeyen bir hata oluştu.';
+        return { success: false, message: `Performans verisi çekilirken hata: ${message}` };
+    }
 }

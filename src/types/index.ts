@@ -52,3 +52,13 @@ export type Region = {
     province?: string | null;
     sgk_province_code?: string | null;
 };
+export type DailyPerformanceRecord = {
+  date: string;
+  user: string;
+  total: number;
+  endTime: string;
+  idleTime: string;
+  startTime: string;
+  // Diğer tüm dinamik alanlar (saatler ve görev tipleri) için
+  [key: string]: number | string;
+};
