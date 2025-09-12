@@ -664,3 +664,86 @@ export async function getPerformanceDataForDateRange(regionName: string, startDa
         return { success: false, message: `Performans verisi çekilirken hata: ${message}` };
     }
 }
+// YENİ: Dönen veri için spesifik bir tip tanımlandı
+type AggregatedRegionData = {
+  regionName: string;
+  totalActivity: number;
+  jobCounts: { [key: string]: number };
+};
+
+// GÜNCELLEME: Fonksiyonun geri dönüş tipindeki 'any' kaldırıldı ve AggregatedRegionData tipi kullanıldı
+export async function getAllRegionsPerformanceData(
+  startDate: string,
+  endDate: string
+): Promise<{
+  success: boolean;
+  data?: AggregatedRegionData[];
+  message?: string;
+}> {
+  "use server";
+  try {
+    const mainSupabase = createClient();
+    const { data: regions, error: regionsError } = await mainSupabase.from('regions').select('name');
+    if (regionsError) throw new Error(`Bölgeler çekilirken hata: ${regionsError.message}`);
+    if (!regions || regions.length === 0) return { success: true, data: [] };
+
+    const performanceSupabase = createPerformanceClient();
+
+    const dataPromises = regions.map(region => {
+      const tableName = getTableNameForRegion(region.name);
+      return performanceSupabase
+        .from(tableName)
+        .select('data')
+        .gte('log_date', startDate)
+        .lte('log_date', endDate)
+        .then(response => ({
+          regionName: region.name,
+          ...response
+        }));
+    });
+
+    const results = await Promise.all(dataPromises);
+
+    const aggregatedData: { [key: string]: { totalActivity: number, jobCounts: { [job: string]: number } } } = {};
+
+    const keysToExclude = new Set(['date', 'user', 'total', 'endTime', 'idleTime', 'startTime', ...Array.from({ length: 48 }, (_, i) => `${Math.floor(i / 2).toString().padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`)]);
+
+    for (const result of results) {
+      if (result.error) {
+        console.warn(`'${result.regionName}' bölgesi için veri çekilirken hata oluştu:`, result.error.message);
+        continue;
+      }
+
+      if (result.data) {
+        // GÜNCELLEME: 'record' değişkeni için spesifik bir tip eklenerek 'any' hatası giderildi.
+        for (const record of result.data as { data: DailyPerformanceRecord[] }[]) {
+          const dailyRecords = record.data;
+          for (const dailyRecord of dailyRecords) {
+            if (!aggregatedData[result.regionName]) {
+              aggregatedData[result.regionName] = { totalActivity: 0, jobCounts: {} };
+            }
+            aggregatedData[result.regionName].totalActivity += dailyRecord.total || 0;
+
+            for (const [key, value] of Object.entries(dailyRecord)) {
+              if (!keysToExclude.has(key) && typeof value === 'number') {
+                const currentJobCount = aggregatedData[result.regionName].jobCounts[key] || 0;
+                aggregatedData[result.regionName].jobCounts[key] = currentJobCount + value;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const finalData = Object.entries(aggregatedData).map(([regionName, values]) => ({
+      regionName,
+      ...values
+    }));
+
+    return { success: true, data: finalData };
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Bilinmeyen bir hata oluştu.';
+    return { success: false, message: `Tüm bölgelerin performans verisi çekilirken hata: ${message}` };
+  }
+}

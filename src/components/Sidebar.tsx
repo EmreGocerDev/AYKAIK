@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from 'react';
 // YENİ: TrendingUp ikonu Performans başlığı için kullanılacak
-import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, MessageSquare, Wallet, TrendingUp } from 'lucide-react';
+import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, Wallet, TrendingUp, BarChart3  } from 'lucide-react';
 import { useSettings } from "@/contexts/SettingsContext";
 import Image from "next/image";
 
@@ -23,7 +23,8 @@ const inventoryLinks = [
 
 // YENİ: Performans İzleme için yeni bir link kategorisi oluşturuldu.
 const performanceLinks = [
-  { name: "Günlük Performans", href: "/dashboard/performance", icon: TrendingUp }
+  { name: "Bölgesel Performans", href: "/dashboard/performance", icon: TrendingUp },
+   { name: "Toplam Performans", href: "/dashboard/total-performance", icon: BarChart3 }
 ];
 
 const aykaKasaLink = { name: "Ayka Kasa", href: "/dashboard/ayka-kasa", icon: Wallet };
