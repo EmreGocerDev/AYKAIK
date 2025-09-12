@@ -2,12 +2,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from 'react';
-// YENİ: TrendingUp ikonu Performans başlığı için kullanılacak
-import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, Wallet, TrendingUp, BarChart3  } from 'lucide-react';
+import { Home, Calendar, Users, Briefcase, ChevronsLeft, ChevronsRight, Settings, Map, ClipboardList, UserCog, Bell, ChevronDown, ChevronUp, Archive, Box, Wallet, TrendingUp, BarChart3 } from 'lucide-react';
 import { useSettings } from "@/contexts/SettingsContext";
 import Image from "next/image";
 
-// DEĞİŞTİRİLDİ: Performans İzleme buradan kaldırıldı.
 const navLinks = [
   { name: "Ana Panel", href: "/dashboard", icon: Home },
   { name: "Bildirimler", href: "/dashboard/notifications", icon: Bell },
@@ -21,10 +19,10 @@ const inventoryLinks = [
   { name: "Stok Yönetimi", href: "/dashboard/inventory/stock", icon: Box }
 ];
 
-// YENİ: Performans İzleme için yeni bir link kategorisi oluşturuldu.
 const performanceLinks = [
   { name: "Bölgesel Performans", href: "/dashboard/performance", icon: TrendingUp },
-   { name: "Toplam Performans", href: "/dashboard/total-performance", icon: BarChart3 }
+  // Önceki adımdan eklenen Toplam Performans linki
+  { name: "Toplam Performans", href: "/dashboard/total-performance", icon: BarChart3 }
 ];
 
 const aykaKasaLink = { name: "Ayka Kasa", href: "/dashboard/ayka-kasa", icon: Wallet };
@@ -48,25 +46,28 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
   
   const [isIkMenuOpen, setIsIkMenuOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
-  // YENİ: Performans kategorisinin açık/kapalı durumunu tutmak için state
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
+  // YENİ: Yönetim menüsü için state eklendi
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   
   const grainEffectOpacity = grainOpacity / 100;
   const color = tintValue >= 0 ? '255, 255, 255' : '0, 0, 0';
   const alpha = Math.abs(tintValue) / 100;
 
   useEffect(() => {
-    if (navLinks.some(link => pathname.startsWith(link.href))) {
+    // Sayfa yolu değiştiğinde ilgili menünün açık kalmasını sağlar
+    if (navLinks.some(link => pathname.startsWith(link.href) && link.href !== '/dashboard')) {
       setIsIkMenuOpen(true);
     }
-
     if (inventoryLinks.some(link => pathname.startsWith(link.href))) {
       setIsInventoryOpen(true);
     }
-    
-    // YENİ: Mevcut sayfa performans ile ilgiliyse, menüyü otomatik olarak açık tut
     if (performanceLinks.some(link => pathname.startsWith(link.href))) {
       setIsPerformanceOpen(true);
+    }
+    // YENİ: Yönetim menüsü için kontrol eklendi
+    if (adminLinks.some(link => pathname.startsWith(link.href))) {
+      setIsAdminMenuOpen(true);
     }
   }, [pathname]);
 
@@ -184,8 +185,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
                 </ul>
               </div>
             </div>
-                     <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
-            {/* YENİ: Performans İzleme Dropdown */}
+            
+            <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+            
+            {/* Performans İzleme Dropdown */}
             <div>
               <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
                   <button
@@ -224,9 +227,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
 
             <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
 
+            {/* Ayka Kasa Direkt Link */}
             <ul>
               <li className="group relative">
-                    <Link
+                <Link
                         href={aykaKasaLink.href}
                         onClick={() => setMobileOpen(false)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ pathname.startsWith(aykaKasaLink.href) ? "bg-blue-600/30 text-white" : "text-white hover:bg-white/5"} ${isCollapsed ? 'md:justify-center' : ''}`}
@@ -239,29 +243,45 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
                 </li>
             </ul>
 
+            {/* GÜNCELLEME: Yönetim bölümü, diğerleri gibi açılır-kapanır menüye dönüştürüldü */}
             {profile?.role === 'admin' && (
               <>
                 <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
-                <div className={`px-4 mt-2 mb-2 text-xs font-semibold text-gray-200 uppercase transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>Yönetim</div>
-                <ul>
-                   {adminLinks.map((link) => {
-                    const isActive = pathname.startsWith(link.href);
-                    return (
-                       <li key={link.name} className="group">
-                         <Link
-                          href={link.href}
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"} ${isCollapsed ? 'md:justify-center' : ''}`}
-                        >
-                          <link.icon className="w-5 h-5 flex-shrink-0" />
-                          <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
-                            {link.name}
-                          </span>
-                        </Link>
-                       </li>
-                    );
-                   })}
-                </ul>
+                <div>
+                  <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
+                      <button
+                          onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                          className={`flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-white/5 transition-colors ${isAdminMenuOpen && !isCollapsed ? 'bg-white/5' : ''}`}
+                      >
+                          <div className="flex items-center gap-3">
+                            <Settings size={18} />
+                            <span className="font-semibold text-sm">Yönetim</span>
+                          </div>
+                          {isAdminMenuOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+                  </div>
+                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isAdminMenuOpen || isCollapsed ? 'max-h-[500px]' : 'max-h-0'}`}>
+                    <ul>
+                       {adminLinks.map((link) => {
+                        const isActive = pathname.startsWith(link.href);
+                        return (
+                           <li key={link.name} className="group relative">
+                              <Link
+                                href={link.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"} ${isCollapsed ? 'md:justify-center' : ''}`}
+                              >
+                                <link.icon className="w-5 h-5 flex-shrink-0" />
+                                <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>
+                                  {link.name}
+                                </span>
+                              </Link>
+                            </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
               </>
             )}
           </nav>

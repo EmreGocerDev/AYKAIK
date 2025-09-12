@@ -7,10 +7,20 @@ import GlassCard from '@/components/GlassCard';
 import toast from 'react-hot-toast';
 import type { DailyPerformanceRecord, Region } from '@/types/index';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp, Activity, Clock, Users, AlertTriangle, User, Briefcase, Calendar, ChevronLeft, ChevronRight, Hash, Star, BarChart3, TrendingDown, Info, GitCompareArrows, ArrowRightLeft, UserCheck } from 'lucide-react';
+import { TrendingUp, Activity, Clock, Users, AlertTriangle, User, Briefcase, Calendar, ChevronLeft, ChevronRight, Hash, Star, BarChart3, TrendingDown, Info, GitCompareArrows, ArrowRightLeft, UserCheck, PauseCircle  } from 'lucide-react';
 
 // --- YARDIMCI BİLEŞENLER VE TİPLER ---
+const timeStringToSeconds = (timeStr: string = "00:00:00"): number => {
+    const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+    return (hours * 3600) + (minutes * 60) + seconds;
+};
 
+const secondsToTimeString = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+    const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+};
 const timeSlots = Array.from({ length: 48 }, (_, i) => {
     const hour = Math.floor(i / 2).toString().padStart(2, '0');
     const minute = (i % 2 === 0 ? '00' : '30');
@@ -74,12 +84,17 @@ const UserBasedView = ({ data, settings }: { data: PerformanceDataInRange, setti
     const availableUsers = useMemo(() => [...new Set(currentDayData.map(d => d.user))].sort(), [currentDayData]);
     const displayedUserData = useMemo(() => selectedUser === 'TÜMÜ' ? currentDayData : currentDayData.filter(d => d.user === selectedUser), [currentDayData, selectedUser]);
     
-    const summaryData = useMemo(() => {
+     const summaryData = useMemo(() => {
         if (displayedUserData.length === 0) return null;
+
         const totalActivity = displayedUserData.reduce((acc, user) => acc + user.total, 0);
         const earliestStart = displayedUserData.reduce((earliest, user) => user.startTime < earliest ? user.startTime : earliest, "23:59:59");
         const latestEnd = displayedUserData.reduce((latest, user) => user.endTime > latest ? user.endTime : latest, "00:00:00");
-        return { totalActivity, workHours: `${earliestStart} - ${latestEnd}` };
+        
+        const totalIdleSeconds = displayedUserData.reduce((acc, user) => acc + timeStringToSeconds(user.idleTime), 0);
+        const idleTime = secondsToTimeString(totalIdleSeconds);
+
+        return { totalActivity, workHours: `${earliestStart} - ${latestEnd}`, idleTime };
     }, [displayedUserData]);
 
     const chartData = useMemo(() => {
@@ -107,9 +122,10 @@ const UserBasedView = ({ data, settings }: { data: PerformanceDataInRange, setti
                 )}
             </div>
             {summaryData && (
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-3 gap-4 mb-6">
                     <GlassCard {...settings}><div className="text-center"><Activity className="mx-auto mb-2 text-green-400" size={28}/><p className="text-2xl font-bold">{summaryData.totalActivity}</p><p className="text-gray-400">Toplam Aktivite</p></div></GlassCard>
                     <GlassCard {...settings}><div className="text-center"><Clock className="mx-auto mb-2 text-cyan-400" size={28}/><p className="text-xl font-bold">{summaryData.workHours}</p><p className="text-gray-400">Çalışma Aralığı</p></div></GlassCard>
+                    <GlassCard {...settings}><div className="text-center"><PauseCircle className="mx-auto mb-2 text-orange-400" size={28}/><p className="text-2xl font-bold">{summaryData.idleTime}</p><p className="text-gray-400">{selectedUser === 'TÜMÜ' ? 'Toplam Boşta Zaman' : 'Boşta Zaman'}</p></div></GlassCard>
                 </div>
             )}
             <GlassCard {...settings} className="mb-6 !p-4">
