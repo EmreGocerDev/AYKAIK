@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { createContext, useState, useEffect, useContext, ReactNode, useCallback  } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import toast from 'react-hot-toast';
@@ -83,6 +83,7 @@ type SettingsContextType = {
   isLoading: boolean; // Eksik olan özellik
   notificationCount: number;
   setNotificationCount: (count: number) => void;
+  playSound: (url: string) => void;
   weekendConfiguration: WeekendConfiguration;
   bg: string;
   setBg: (bg: string) => void;
@@ -116,7 +117,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [dashboardLayout, setDashboardLayoutState] = useState<DashboardLayoutSettings>(DEFAULT_DASHBOARD_SETTINGS);
   const [notificationSoundUrl, setNotificationSoundUrl] = useState('/sounds/notification1.mp3');
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  
+  const playSound = useCallback((url: string) => {
+      console.log("playSound fonksiyonu çağrıldı, URL:", url); // BU SATIRI EKLEYİN
+      if (typeof window === 'undefined' || !audioContext || audioContext.state === 'suspended' || url === 'none') {
+          console.log("Ses çalma koşulları sağlanamadı. AudioContext durumu:", audioContext?.state); // BU SATIRI DA EKLEYİN
+          return;
+      }
+      try {
+          const audio = new Audio(url);
+          audio.play().catch(e => console.error("Ses çalma hatası:", e));
+      } catch (e) {
+          console.error("Audio nesnesi oluşturma hatası:", e);
+      }
+  }, [audioContext]);
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContext) {
         setAudioContext(new window.AudioContext());
@@ -300,6 +313,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     dashboardLayout,
     setDashboardLayout,
     notificationSoundUrl,
+    playSound, 
     setNotificationSoundUrl,
   };
   return (

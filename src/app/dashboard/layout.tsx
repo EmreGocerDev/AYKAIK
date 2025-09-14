@@ -16,7 +16,8 @@ const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
 );
 
 function DashboardContainer({ children }: { children: React.ReactNode }) {
-  const { supabase, bg, isLoading } = useSettings();
+  
+  const { supabase, bg, isLoading, playSound } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -26,8 +27,16 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
+    
   }, []);
-
+useEffect(() => {
+    // Yükleme bittiğinde VE ses daha önce bu oturumda çalınmadıysa sesi çal
+    const welcomeSoundPlayed = sessionStorage.getItem('welcomeSoundPlayed');
+    if (!isLoading && !welcomeSoundPlayed) {
+      playSound('/sounds/login-success.mp3');
+      sessionStorage.setItem('welcomeSoundPlayed', 'true');
+    }
+  }, [isLoading, playSound]); 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/');

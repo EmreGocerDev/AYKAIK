@@ -38,6 +38,28 @@ export type DashboardLayoutSettings = {
 export type LoginState = {
   message: string | null;
 };
+
+// DÜZELTME: saveTechnicalSchedule için tür tanımı
+type TechnicalScheduleEntry = {
+  region_id: number;
+  date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  break_hours?: number | null;
+  notes?: string | null;
+};
+
+// DÜZELTME: getOvertimeReport için tür tanımı
+type OvertimeRecord = {
+  userName: string;
+  date: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualStart: string;
+  actualEnd: string;
+  totalOvertimeSeconds: number;
+};
+
 export async function createLeaveRequest(formData: FormData) {
   const supabase = createAdminClient();
   const rawFormData = {
@@ -53,6 +75,7 @@ export async function createLeaveRequest(formData: FormData) {
     .eq("tc_kimlik_no", rawFormData.tc)
     .eq("email", rawFormData.email_personel)
     .single();
+
   if (personnelError || !personnel) {
     console.error("Personel doğrulama hatası:", personnelError);
     return { success: false, message: "Personel bilgileri hatalı veya bulunamadı." };
@@ -64,6 +87,7 @@ export async function createLeaveRequest(formData: FormData) {
     timestamp: new Date().toISOString(),
     notes: `Talep, personel tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
   }];
+
   const { error: insertError } = await supabase.from("leave_requests").insert({
     personnel_id: personnel.id,
     start_date: rawFormData.start_date,
@@ -72,6 +96,7 @@ export async function createLeaveRequest(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
+
   if (insertError) {
     return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
   }
@@ -83,10 +108,12 @@ export async function login(prevState: LoginState, formData: FormData) {
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
   const supabase = createClient();
+
   const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
+
   if (error) {
     
     return {
@@ -105,6 +132,7 @@ export async function addPersonnel(formData: FormData) {
     .select('value')
     .eq('key', 'default_annual_leave_days')
     .single();
+
   if (settingError) {
     return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
   }
@@ -139,8 +167,6 @@ export async function addPersonnel(formData: FormData) {
     dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
-
-  
     // YENİ EKLENEN ALANLAR
     department: formData.get('department') as string,
     job_title: formData.get('job_title') as string,
@@ -153,6 +179,7 @@ export async function addPersonnel(formData: FormData) {
     private_health_insurance_company: formData.get('private_health_insurance_company') as string,
     private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
+
   if (!rawFormData.full_name || !rawFormData.tc_kimlik_no) {
     return { success: false, message: 'Ad Soyad ve T.C. Kimlik Numarası zorunludur.' };
   }
@@ -171,13 +198,13 @@ export async function addPersonnel(formData: FormData) {
   return { success: true, message: 'Personel başarıyla eklendi.' };
 }
 
-
 export async function deletePersonnel(personnelId: number) {
   const supabase = createClient();
   const { error } = await supabase
     .from('personnel')
     .delete()
     .eq('id', personnelId);
+
   if (error) {
     console.error('Personel silme hatası:', error);
     return { success: false, message: `Veritabanı hatası: ${error.message}` };
@@ -188,10 +215,10 @@ export async function deletePersonnel(personnelId: number) {
   return { success: true, message: 'Personel başarıyla silindi.' };
 }
 
-
 export async function updatePersonnel(formData: FormData) {
   const supabase = createClient();
   const id = Number(formData.get('id'));
+
   if (!id) {
     return { success: false, message: 'Personel ID bulunamadı.' };
   }
@@ -211,7 +238,6 @@ export async function updatePersonnel(formData: FormData) {
     eş_gelir_durumu: formData.get('eş_gelir_durumu') as string,
     number_of_children: Number(formData.get('number_of_children')),
     agi_yüzdesi: formData.get('agi_yüzdesi') as string,
-  
     engel_derecesi: formData.get('engel_derecesi') as string,
     address: formData.get('address') as string,
     phone_number: formData.get('phone_number') as string,
@@ -225,7 +251,6 @@ export async function updatePersonnel(formData: FormData) {
     dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
     belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
     isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
-
     // YENİ EKLENEN ALANLAR
     department: formData.get('department') as string,
     job_title: formData.get('job_title') as string,
@@ -238,10 +263,12 @@ export async function updatePersonnel(formData: FormData) {
     private_health_insurance_company: formData.get('private_health_insurance_company') as string,
     private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
+
   const { error } = await supabase
     .from('personnel')
     .update(rawFormData)
     .eq('id', id);
+
   if (error) {
     console.error("Personel güncelleme hatası:", error);
     if (error.code === '23505') {
@@ -265,6 +292,7 @@ async function updateLeaveRequest(
 
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: "Yetkili profili bulunamadı." };
+
   const { data: currentRequest, error: fetchError } = await supabase
     .from('leave_requests')
     .select('history_log, leave_type')
@@ -279,6 +307,7 @@ async function updateLeaveRequest(
       approved: "Nihai Onay Verildi",
       rejected: "Nihai Red Verildi"
   };
+
   const newHistoryEntry: HistoryEntry = {
     action: actionTextMap[newStatus],
     actor: `${actorName} (${profile.role})`,
@@ -286,11 +315,14 @@ async function updateLeaveRequest(
     notes: notes || "Not eklenmedi.",
   };
   const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
+
   const { error: updateError } = await supabase
     .from('leave_requests')
     .update({ status: newStatus, history_log: updatedHistoryLog })
     .eq('id', requestId);
+
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
+
   if (newStatus === 'approved') {
     const adminSupabase = createAdminClient();
     const { error: rpcError } = await adminSupabase.rpc('generate_timesheet_for_leave', { request_id: requestId });
@@ -308,12 +340,15 @@ async function updateLeaveRequest(
 export async function coordinatorApprove(requestId: number, notes: string) {
   return updateLeaveRequest(requestId, 'approved_by_coordinator', notes);
 }
+
 export async function coordinatorReject(requestId: number, notes: string) {
   return updateLeaveRequest(requestId, 'rejected_by_coordinator', notes);
 }
+
 export async function adminApprove(requestId: number, notes: string) {
   return updateLeaveRequest(requestId, 'approved', notes);
 }
+
 export async function adminReject(requestId: number, notes: string) {
   return updateLeaveRequest(requestId, 'rejected', notes);
 }
@@ -325,12 +360,14 @@ export async function updateLeaveRequestDates(formData: FormData) {
   const newStartDate = formData.get('start_date') as string;
   const newEndDate = formData.get('end_date') as string;
   const originalDates = formData.get('original_dates') as string;
+
   if (!requestId || !newStartDate || !newEndDate) {
     return { success: false, message: 'Eksik bilgi.' };
   }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
@@ -355,6 +392,7 @@ export async function updateLeaveRequestDates(formData: FormData) {
       history_log: updatedHistoryLog 
     })
     .eq('id', requestId);
+    
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
 
   revalidatePath('/dashboard/requests');
@@ -377,6 +415,7 @@ export async function createLeaveForPersonnel(formData: FormData) {
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
@@ -398,6 +437,7 @@ export async function createLeaveForPersonnel(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
+
   if (error) {
     return { success: false, message: `Veritabanı hatası: ${error.message}` };
   }
@@ -437,6 +477,7 @@ export async function updateRegion(formData: FormData) {
     sgk_province_code: formData.get('sgk_province_code') as string,
   };
   if (!id || !rawFormData.name) return { success: false, message: 'Gerekli bilgiler eksik.' };
+
   const { error } = await supabase.from('regions').update(rawFormData).eq('id', id);
 
   if (error) return { success: false, message: `Hata: ${error.message}` };
@@ -452,6 +493,7 @@ export async function deleteRegion(regionId: number) {
     .select('id')
     .eq('region_id', regionId)
     .limit(1);
+
   if (checkError) return { success: false, message: `Kontrol hatası: ${checkError.message}` };
   if (personnel && personnel.length > 0) {
     return { success: false, message: 'Bu bölgede personel bulunduğu için silinemez. Önce personelleri başka bir bölgeye taşıyın.' };
@@ -470,6 +512,7 @@ export async function updateSystemSettings(formData: FormData) {
     { key: 'default_annual_leave_days', value: formData.get('default_annual_leave_days') },
     { key: 'weekend_configuration', value: formData.get('weekend_configuration') }
   ];
+
   try {
     for (const setting of settingsToUpdate) {
       if (setting.value !== null) {
@@ -500,6 +543,59 @@ export async function updateSystemSettings(formData: FormData) {
   }
 }
 
+export async function getTechnicalSchedulePresets(regionId: number) {
+    "use server";
+    if (!regionId) return { success: false, data: null, message: "Bölge ID'si belirtilmedi." };
+    
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+        .from('technical_schedule_presets')
+        .select('*')
+        .eq('region_id', regionId)
+        .order('preset_id', { ascending: true });
+
+    if (error) {
+        console.error("Teknik takvim şablonları çekme hatası:", error);
+        return { success: false, data: null, message: error.message };
+    }
+    return { success: true, data };
+}
+
+export async function updateTechnicalScheduleSettings(formData: FormData) {
+  "use server";
+  const supabase = createAdminClient();
+  const regionId = Number(formData.get('region_id'));
+  if (!regionId) return { success: false, message: 'Bölge bilgisi eksik.' };
+  
+  try {
+    const presetsToUpsert = Array.from({ length: 5 }).map((_, i) => ({
+      region_id: regionId,
+      preset_id: i + 1,
+      name: formData.get(`preset_${i}_name`) as string,
+      start_time: formData.get(`preset_${i}_start_time`) as string,
+      end_time: formData.get(`preset_${i}_end_time`) as string,
+      break_hours: Number(formData.get(`preset_${i}_break_hours`)),
+      color: formData.get(`preset_${i}_color`) as string, // YENİ EKLENDİ
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('technical_schedule_presets')
+      .upsert(presetsToUpsert, { onConflict: 'region_id, preset_id' });
+    if (error) throw error;
+
+    revalidatePath('/dashboard/timesheet/technical-schedule-settings');
+    revalidatePath('/dashboard/timesheet/technical-schedule');
+    return { success: true, message: 'Teknik takvim ayarları başarıyla kaydedildi.' };
+  } catch (error) {
+    let message = 'Bilinmeyen bir hata oluştu.';
+    if (error instanceof Error) {
+      message = `Ayarlar güncellenemedi: ${error.message}`;
+    }
+    return { success: false, message };
+  }
+}
+
 export async function createUser(formData: FormData) {
   const adminSupabase = createAdminClient();
 
@@ -507,6 +603,7 @@ export async function createUser(formData: FormData) {
   const password = formData.get('password') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
+
   if (!email || !password || !full_name || !region_id) {
     return { success: false, message: 'Tüm alanlar zorunludur.' };
   }
@@ -517,6 +614,7 @@ export async function createUser(formData: FormData) {
     password,
     email_confirm: true,
   });
+
   if (authError) {
     console.error("Auth kullanıcısı oluşturma hatası:", authError);
     return { success: false, message: `Kullanıcı oluşturulamadı: ${authError.message}` };
@@ -529,6 +627,7 @@ export async function createUser(formData: FormData) {
     region_id,
     role: 'coordinator',
   });
+
   if (profileError) {
     console.error("Profil oluşturma/güncelleme hatası:", profileError);
     await adminSupabase.auth.admin.deleteUser(authData.user.id);
@@ -539,22 +638,21 @@ export async function createUser(formData: FormData) {
   return { success: true, message: 'Koordinatör başarıyla oluşturuldu.' };
 }
 
-// *** SORUN ÇÖZÜMÜ BAŞLANGICI ***
-// Admin yetkisiyle çalışması için 'createAdminClient' kullanıldı.
 export async function updateUser(formData: FormData) {
   const adminSupabase = createAdminClient();
-  // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
   const userId = formData.get('userId') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
+
   if (!userId || !full_name || !region_id) {
     return { success: false, message: 'Eksik bilgi.' };
   }
 
-  const { error } = await adminSupabase // YETKİLENDİRME İÇİN DEĞİŞTİRİLDİ
+  const { error } = await adminSupabase
     .from('profiles')
     .update({ full_name, region_id })
     .eq('id', userId);
+
   if (error) {
     console.error("Kullanıcı güncelleme hatası:", error);
     return { success: false, message: `Güncelleme hatası: ${error.message}` };
@@ -563,7 +661,6 @@ export async function updateUser(formData: FormData) {
   revalidatePath('/dashboard/users');
   return { success: true, message: 'Kullanıcı bilgileri güncellendi.' };
 }
-// *** SORUN ÇÖZÜMÜ SONU ***
 
 export async function deleteUser(userId: string) {
   const adminSupabase = createAdminClient();
@@ -587,10 +684,10 @@ export async function getUserProfiles() {
   return { data, error };
 }
 
-// YENİ: Dashboard düzenini kaydetmek için server action
 export async function updateUserDashboardLayout(layout: DashboardLayoutSettings) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
     return { success: false, message: 'Kullanıcı bulunamadı.' };
   }
@@ -601,6 +698,7 @@ export async function updateUserDashboardLayout(layout: DashboardLayoutSettings)
       user_id: user.id,
       dashboard_layout: layout,
     }, { onConflict: 'user_id' });
+
   if (error) {
     console.error("Dashboard layout güncelleme hatası:", error);
     return { success: false, message: 'Layout güncellenemedi.' };
@@ -609,30 +707,26 @@ export async function updateUserDashboardLayout(layout: DashboardLayoutSettings)
   revalidatePath('/dashboard');
   return { success: true };
 }
-// Bölgeye göre dinamik tablo adı oluşturan yardımcı fonksiyon
-// Bölgeye göre dinamik tablo adı oluşturan yardımcı fonksiyon
-const getTableNameForRegion = (regionName: string) => {
-    // Gelen bölge adını her zaman küçük harfe çevirerek karşılaştıralım
-    const lowerCaseRegionName = regionName.toLowerCase();
 
-    // Samsun bölgesi için özel durum kontrolü
+const getTableNameForRegion = (regionName: string) => {
+    const lowerCaseRegionName = regionName.toLowerCase();
     if (lowerCaseRegionName === 'samsun') {
         return 'performance_logs';
     }
 
-    // Diğer tüm bölgeler için genel kural devam ediyor
     const sanitizedName = lowerCaseRegionName
         .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
         .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
         .replace(/\s+/g, '_');
     return `performance_logs_${sanitizedName}`;
 };
-// 1. Fonksiyon: Seçili bölgedeki mevcut log tarihlerini çeker
+
 export async function getAvailablePerformanceDates(regionName: string): Promise<{ success: boolean; data?: string[]; message?: string; }> {
     "use server";
     if (!regionName) return { success: false, message: "Bölge adı belirtilmedi." };
     const performanceSupabase = createPerformanceClient();
     const tableName = getTableNameForRegion(regionName);
+
     try {
         const { data, error } = await performanceSupabase.from(tableName).select('log_date').order('log_date', { ascending: false });
         if (error) throw error;
@@ -642,12 +736,14 @@ export async function getAvailablePerformanceDates(regionName: string): Promise<
         return { success: false, message: `Tarihler çekilirken hata: ${message}` };
     }
 }
-// 2. Fonksiyon: Seçili bölge ve tarihe ait JSON verisini çeker
+
 export async function getPerformanceDataForDateRange(regionName: string, startDate: string, endDate: string): Promise<{ success: boolean; data?: { log_date: string, data: DailyPerformanceRecord[] }[]; message?: string; }> {
     "use server";
     if (!regionName || !startDate || !endDate) return { success: false, message: "Bölge veya tarih aralığı belirtilmedi." };
+    
     const performanceSupabase = createPerformanceClient();
     const tableName = getTableNameForRegion(regionName);
+    
     try {
         const { data, error } = await performanceSupabase
             .from(tableName)
@@ -655,7 +751,6 @@ export async function getPerformanceDataForDateRange(regionName: string, startDa
             .gte('log_date', startDate)
             .lte('log_date', endDate)
             .order('log_date', { ascending: true });
-
         if (error) throw error;
         
         return { success: true, data: data as { log_date: string, data: DailyPerformanceRecord[] }[] };
@@ -664,14 +759,13 @@ export async function getPerformanceDataForDateRange(regionName: string, startDa
         return { success: false, message: `Performans verisi çekilirken hata: ${message}` };
     }
 }
-// YENİ: Dönen veri için spesifik bir tip tanımlandı
+
 type AggregatedRegionData = {
   regionName: string;
   totalActivity: number;
   jobCounts: { [key: string]: number };
 };
 
-// GÜNCELLEME: Fonksiyonun geri dönüş tipindeki 'any' kaldırıldı ve AggregatedRegionData tipi kullanıldı
 export async function getAllRegionsPerformanceData(
   startDate: string,
   endDate: string
@@ -688,7 +782,6 @@ export async function getAllRegionsPerformanceData(
     if (!regions || regions.length === 0) return { success: true, data: [] };
 
     const performanceSupabase = createPerformanceClient();
-
     const dataPromises = regions.map(region => {
       const tableName = getTableNameForRegion(region.name);
       return performanceSupabase
@@ -701,11 +794,9 @@ export async function getAllRegionsPerformanceData(
           ...response
         }));
     });
-
     const results = await Promise.all(dataPromises);
 
     const aggregatedData: { [key: string]: { totalActivity: number, jobCounts: { [job: string]: number } } } = {};
-
     const keysToExclude = new Set(['date', 'user', 'total', 'endTime', 'idleTime', 'startTime', ...Array.from({ length: 48 }, (_, i) => `${Math.floor(i / 2).toString().padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`)]);
 
     for (const result of results) {
@@ -715,7 +806,6 @@ export async function getAllRegionsPerformanceData(
       }
 
       if (result.data) {
-        // GÜNCELLEME: 'record' değişkeni için spesifik bir tip eklenerek 'any' hatası giderildi.
         for (const record of result.data as { data: DailyPerformanceRecord[] }[]) {
           const dailyRecords = record.data;
           for (const dailyRecord of dailyRecords) {
@@ -723,7 +813,6 @@ export async function getAllRegionsPerformanceData(
               aggregatedData[result.regionName] = { totalActivity: 0, jobCounts: {} };
             }
             aggregatedData[result.regionName].totalActivity += dailyRecord.total || 0;
-
             for (const [key, value] of Object.entries(dailyRecord)) {
               if (!keysToExclude.has(key) && typeof value === 'number') {
                 const currentJobCount = aggregatedData[result.regionName].jobCounts[key] || 0;
@@ -739,11 +828,146 @@ export async function getAllRegionsPerformanceData(
       regionName,
       ...values
     }));
-
     return { success: true, data: finalData };
 
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Bilinmeyen bir hata oluştu.';
     return { success: false, message: `Tüm bölgelerin performans verisi çekilirken hata: ${message}` };
   }
+}
+
+export async function getTechnicalScheduleForMonth(regionId: number, year: number, month: number) {
+  "use server";
+  const supabase = createAdminClient();
+  const startDate = new Date(Date.UTC(year, month, 1)).toISOString();
+  const endDate = new Date(Date.UTC(year, month + 1, 0)).toISOString();
+  
+  const { data, error } = await supabase
+    .from('technical_schedules')
+    .select('*')
+    .eq('region_id', regionId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+    
+  if (error) {
+    console.error("Teknik takvim verisi çekme hatası:", error);
+    return { success: false, data: null, message: error.message };
+  }
+  return { success: true, data, message: 'Veri başarıyla çekildi.' };
+}
+
+export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[]) {
+    "use server";
+    const supabase = createAdminClient();
+    
+    const dataToUpsert = schedules.map(s => ({
+        region_id: s.region_id,
+        date: s.date,
+        start_time: s.start_time || null,
+        end_time: s.end_time || null,
+        break_hours: s.break_hours || null,
+        notes: s.notes || null
+    }));
+    
+    const { error } = await supabase
+        .from('technical_schedules')
+        .upsert(dataToUpsert, { onConflict: 'region_id,date' });
+        
+    if (error) {
+        console.error("Teknik takvim kaydetme hatası:", error);
+        return { success: false, message: `Kayıt hatası: ${error.message}` };
+    }
+    
+    revalidatePath('/dashboard/timesheet/technical-schedule');
+    return { success: true, message: 'Takvim başarıyla güncellendi.' };
+}
+
+export async function getOvertimeReport(regionName: string, startDate: string, endDate: string) {
+    "use server";
+    const mainSupabase = createAdminClient();
+    const performanceSupabase = createPerformanceClient();
+
+    try {
+        const { data: region, error: regionError } = await mainSupabase.from('regions').select('id').eq('name', regionName).single();
+        if (regionError || !region) throw new Error("Bölge bulunamadı.");
+
+        const { data: schedules, error: schedulesError } = await mainSupabase
+            .from('technical_schedules')
+            .select('date, start_time, end_time')
+            .eq('region_id', region.id)
+            .gte('date', startDate)
+            .lte('date', endDate);
+        if (schedulesError) throw schedulesError;
+
+        const scheduleMap = new Map(schedules.map(s => [s.date, { start: s.start_time, end: s.end_time }]));
+        
+        const getTableNameForRegion = (name: string) => {
+            const lowerCaseRegionName = name.toLowerCase();
+            if (lowerCaseRegionName === 'samsun') return 'performance_logs';
+            const sanitizedName = lowerCaseRegionName
+                .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+                .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+                .replace(/\s+/g, '_');
+            return `performance_logs_${sanitizedName}`;
+        };
+        const tableName = getTableNameForRegion(regionName);
+
+        const { data: performanceLogs, error: performanceError } = await performanceSupabase
+            .from(tableName)
+            .select('log_date, data')
+            .gte('log_date', startDate)
+            .lte('log_date', endDate);
+        if (performanceError) throw performanceError;
+
+        const timeStringToSeconds = (timeStr: string = "00:00:00"): number => {
+            const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+            return (hours * 3600) + (minutes * 60) + (seconds || 0);
+        };
+
+        const overtimeRecords: OvertimeRecord[] = [];
+        
+        for (const dayLog of performanceLogs) {
+            const date = dayLog.log_date;
+            const dailySchedule = scheduleMap.get(date);
+
+            if (!dailySchedule || !dailySchedule.start || !dailySchedule.end) continue;
+            
+            const scheduledStartSeconds = timeStringToSeconds(dailySchedule.start);
+            const scheduledEndSeconds = timeStringToSeconds(dailySchedule.end);
+            
+            for (const userRecord of (dayLog.data as DailyPerformanceRecord[])) {
+                const actualStartSeconds = timeStringToSeconds(userRecord.startTime);
+                const actualEndSeconds = timeStringToSeconds(userRecord.endTime);
+
+                let earlyStartOvertime = 0;
+                if (actualStartSeconds < scheduledStartSeconds) {
+                    earlyStartOvertime = scheduledStartSeconds - actualStartSeconds;
+                }
+
+                let lateFinishOvertime = 0;
+                if (actualEndSeconds > scheduledEndSeconds) {
+                    lateFinishOvertime = actualEndSeconds - scheduledEndSeconds;
+                }
+
+                const totalOvertime = earlyStartOvertime + lateFinishOvertime;
+                
+                overtimeRecords.push({
+                    userName: userRecord.user,
+                    date: date,
+                    scheduledStart: dailySchedule.start,
+                    scheduledEnd: dailySchedule.end,
+                    actualStart: userRecord.startTime,
+                    actualEnd: userRecord.endTime,
+                    totalOvertimeSeconds: totalOvertime
+                });
+            }
+        }
+
+        return { success: true, data: overtimeRecords };
+    } catch (error) {
+        let message = 'Bilinmeyen bir hata oluştu.';
+        if (error instanceof Error) message = error.message;
+        console.error("Fazla mesai raporu hatası:", message);
+        return { success: false, message: `Rapor oluşturulamadı: ${message}` };
+    }
 }
