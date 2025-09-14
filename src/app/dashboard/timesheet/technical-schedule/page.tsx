@@ -22,9 +22,9 @@ type DaySchedule = {
     start_time?: string;
     end_time?: string;
     break_hours?: number;
+    preset_id?: number;
 };
 
-// HEX rengi RGBA'ya çevirerek opaklık eklememizi sağlayan yardımcı fonksiyon
 const hexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -32,9 +32,11 @@ const hexToRgba = (hex: string, alpha: number) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// YENİ: Haftanın günlerini tanımlıyoruz.
+const weekDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
 export default function TechnicalSchedulePage() {
     const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
-    
     const [regions, setRegions] = useState<Region[]>([]);
     const [selectedRegionId, setSelectedRegionId] = useState<string>('');
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -48,6 +50,14 @@ export default function TechnicalSchedulePage() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
+    
+    // YENİ: Ayın ilk gününün haftanın hangi gününe denk geldiğini hesaplıyoruz.
+    // Bu, takvimin başına kaç tane boş hücre ekleyeceğimizi belirler.
+    const firstDayOfMonth = useMemo(() => {
+        const dayIndex = new Date(year, month, 1).getDay(); // Pazar: 0, Pazartesi: 1...
+        // Pazartesi'nin 0, Pazar'ın 6 olacağı bir sisteme çeviriyoruz.
+        return (dayIndex + 6) % 7;
+    }, [year, month]);
 
     useEffect(() => {
         const fetchRegionsData = async () => {
@@ -75,11 +85,12 @@ export default function TechnicalSchedulePage() {
         const scheduleResult = await getTechnicalScheduleForMonth(regionIdNum, year, month);
         if (scheduleResult.success && scheduleResult.data) {
             const newSchedules = scheduleResult.data.reduce((acc, schedule) => {
-                const day = new Date(schedule.date.replace(/-/g, '/')).getUTCDate();
+                const day = new Date(schedule.date + 'T00:00:00Z').getUTCDate();
                 acc[day] = {
                     start_time: schedule.start_time || undefined,
                     end_time: schedule.end_time || undefined,
                     break_hours: schedule.break_hours || undefined,
+                    preset_id: schedule.preset_id || undefined,
                 };
                 return acc;
             }, {} as Record<number, DaySchedule>);
@@ -94,7 +105,7 @@ export default function TechnicalSchedulePage() {
     useEffect(() => {
         fetchPageData();
     }, [fetchPageData]);
-    
+
     const handleDayClick = (day: number) => {
         if (!activePreset) return;
         setSchedules(prev => {
@@ -106,6 +117,7 @@ export default function TechnicalSchedulePage() {
                     start_time: activePreset.start_time,
                     end_time: activePreset.end_time,
                     break_hours: activePreset.break_hours,
+                    preset_id: activePreset.preset_id,
                 };
             }
             return newSchedules;
@@ -185,11 +197,27 @@ export default function TechnicalSchedulePage() {
                     <div className="text-center py-10">Takvim Yükleniyor...</div>
                 ) : (
                     <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}}>
+                        
+                        {/* YENİ: Haftanın günlerini gösteren başlıklar */}
+                        <div className="grid grid-cols-7 gap-2 mb-2">
+                            {weekDays.map(day => (
+                                <div key={day} className="text-center font-bold text-gray-400 pb-2">{day}</div>
+                            ))}
+                        </div>
+                        
+                        {/* GÜNCELLENDİ: Takvim ızgarası artık hizalı */}
                         <div className="grid grid-cols-7 gap-2">
+                            
+                            {/* YENİ: Ayın ilk gününü doğru kolona yerleştirmek için boşluklar oluşturuyoruz */}
+                            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                                <div key={`placeholder-${i}`} />
+                            ))}
+
+                            {/* Mevcut günleri render etme mantığı */}
                             {Array.from({ length: daysInMonth }).map((_, i) => {
                                 const day = i + 1;
                                 const schedule = schedules[day];
-                                const appliedPreset = schedule ? presets.find(p => p.start_time === schedule.start_time && p.end_time === schedule.end_time && p.break_hours == schedule.break_hours) : null;
+                                const appliedPreset = schedule?.preset_id ? presets.find(p => p.preset_id === schedule.preset_id) : null;
                                 
                                 const dayStyle = appliedPreset ? {
                                     backgroundColor: hexToRgba(appliedPreset.color, 0.2),

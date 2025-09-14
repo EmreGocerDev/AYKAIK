@@ -46,6 +46,7 @@ type TechnicalScheduleEntry = {
   start_time?: string | null;
   end_time?: string | null;
   break_hours?: number | null;
+  preset_id?: number | null;
   notes?: string | null;
 };
 
@@ -841,22 +842,21 @@ export async function getTechnicalScheduleForMonth(regionId: number, year: numbe
   const supabase = createAdminClient();
   const startDate = new Date(Date.UTC(year, month, 1)).toISOString();
   const endDate = new Date(Date.UTC(year, month + 1, 0)).toISOString();
-  
   const { data, error } = await supabase
     .from('technical_schedules')
-    .select('*')
+    .select('date, start_time, end_time, break_hours, preset_id') // preset_id eklendi
     .eq('region_id', regionId)
     .gte('date', startDate)
     .lte('date', endDate);
-    
+
   if (error) {
     console.error("Teknik takvim verisi çekme hatası:", error);
     return { success: false, data: null, message: error.message };
   }
   return { success: true, data, message: 'Veri başarıyla çekildi.' };
 }
-
-export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[]) {
+// YENİ: Teknik takvim verilerini toplu olarak kaydeder/günceller
+export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[]) { // Not: Bu 'any' tipini bir sonraki adımda düzelteceğiz.
     "use server";
     const supabase = createAdminClient();
     
@@ -866,13 +866,14 @@ export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[])
         start_time: s.start_time || null,
         end_time: s.end_time || null,
         break_hours: s.break_hours || null,
-        notes: s.notes || null
+        notes: s.notes || null,
+        preset_id: s.preset_id || null // preset_id eklendi
     }));
-    
+
     const { error } = await supabase
         .from('technical_schedules')
         .upsert(dataToUpsert, { onConflict: 'region_id,date' });
-        
+
     if (error) {
         console.error("Teknik takvim kaydetme hatası:", error);
         return { success: false, message: `Kayıt hatası: ${error.message}` };
@@ -881,7 +882,6 @@ export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[])
     revalidatePath('/dashboard/timesheet/technical-schedule');
     return { success: true, message: 'Takvim başarıyla güncellendi.' };
 }
-
 export async function getOvertimeReport(regionName: string, startDate: string, endDate: string) {
     "use server";
     const mainSupabase = createAdminClient();
