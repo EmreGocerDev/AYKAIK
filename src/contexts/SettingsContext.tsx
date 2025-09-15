@@ -15,7 +15,6 @@ type Profile = {
   region_id: number | null;
 };
 type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
-
 type UserSettings = {
     user_id: string;
     background_url: string | null;
@@ -26,7 +25,6 @@ type UserSettings = {
     dashboard_layout: DashboardLayoutSettings | null;
     notification_sound_url: string | null;
 };
-
 export type WidgetDefinition = {
     id: string;
     name: string;
@@ -74,13 +72,11 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
     welcome: true, quickActions: true,
   }
 };
-
-// DÜZELTME: isLoading özelliği eklendi
 type SettingsContextType = {
   supabase: SupabaseClient;
   user: User | null;
   profile: Profile | null;
-  isLoading: boolean; // Eksik olan özellik
+  isLoading: boolean;
   notificationCount: number;
   setNotificationCount: (count: number) => void;
   playSound: (url: string) => void;
@@ -106,7 +102,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Yüklenme state'i
+  const [isLoading, setIsLoading] = useState(true);
   const [notificationCount, setNotificationCount] = useState(0);
   const [bg, setBg] = useState("/backgrounds/bg1.jpg");
   const [tintValue, setTintValue] = useState(15);
@@ -117,10 +113,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [dashboardLayout, setDashboardLayoutState] = useState<DashboardLayoutSettings>(DEFAULT_DASHBOARD_SETTINGS);
   const [notificationSoundUrl, setNotificationSoundUrl] = useState('/sounds/notification1.mp3');
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  
   const playSound = useCallback((url: string) => {
-      console.log("playSound fonksiyonu çağrıldı, URL:", url); // BU SATIRI EKLEYİN
       if (typeof window === 'undefined' || !audioContext || audioContext.state === 'suspended' || url === 'none') {
-          console.log("Ses çalma koşulları sağlanamadı. AudioContext durumu:", audioContext?.state); // BU SATIRI DA EKLEYİN
           return;
       }
       try {
@@ -130,35 +125,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           console.error("Audio nesnesi oluşturma hatası:", e);
       }
   }, [audioContext]);
+  
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContext) {
         setAudioContext(new window.AudioContext());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const unlockAudio = () => {
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                console.log('Ses çalma izni kullanıcı etkileşimi ile aktive edildi!');
-            });
-            document.removeEventListener('click', unlockAudio);
-            document.removeEventListener('keydown', unlockAudio);
-        }
-    };
-    document.addEventListener('click', unlockAudio);
-    document.addEventListener('keydown', unlockAudio);
-    return () => {
-        document.removeEventListener('click', unlockAudio);
-        document.removeEventListener('keydown', unlockAudio);
-    };
   }, [audioContext]);
-  
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
+
+        // YENİ LOGIC: Eğer İK Portalı kullanıcısı varsa, onun ayarlarını yükle
         if (user) {
           setUser(user);
           const [profileRes, settingsRes, weekendRes] = await Promise.all([
@@ -168,15 +147,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           ]);
     
           if (profileRes.data) {
-              setProfile(profileRes.data);
+              setProfile(profileRes.data as Profile);
               const { data: count, error } = await supabase.rpc('get_notification_count', {
                   user_role: profileRes.data.role,
-                  user_region_id: profileRes.data.region_id
+                   user_region_id: profileRes.data.region_id
               });
              
                if (!error) { setNotificationCount(count); }
           }
           if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
+
           if (settingsRes.data) {
             const userSettings = settingsRes.data as UserSettings;
             setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
@@ -205,98 +185,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               setDashboardLayoutState(validatedSettings);
             }
           }
+        } else {
+          // YENİ LOGIC: Eğer İK Portalı kullanıcısı yoksa, bu bir AykaSosyal kullanıcısıdır.
+          // Sizin istediğiniz varsayılan değerleri uyguluyoruz.
+          setProfile(null);
+          setUser(null);
+          setBg("/backgrounds/bg8.jpg"); // Sosyal kullanıcılar için farklı bir arkaplan
+          setTintValue(-5);
+          setBlurPx(16);
+          setGrainOpacity(0);
+          setBorderRadiusPx(16);
         }
       } catch (error) {
         console.error("Başlangıç verileri çekilirken hata:", error);
       } finally {
-        setIsLoading(false); // Her durumda yüklenmeyi bitir
+        setIsLoading(false); 
       }
     };
     fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      const profileChannel = supabase.channel('realtime-profile-update').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}`}, (payload) => {
-        console.log('Kullanıcı profili sunucudan güncellendi:', payload.new);
-        toast.success('Yetkileriniz bir yönetici tarafından güncellendi. Sayfa yenileniyor...', { duration: 5000, id: 'profile-update-toast' });
-        setTimeout(() => { window.location.reload(); }, 3000);
-      }).subscribe();
-      return () => { supabase.removeChannel(profileChannel); };
-    }
-  
-  }, [user]);
+  }, [audioContext]);
   
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
-    updateUserDashboardLayout(newLayout);
+    if (user) { // Sadece İK kullanıcıları layout'u kaydedebilir
+        updateUserDashboardLayout(newLayout);
+    }
   };
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window) || !user || !profile) {
-      return;
-    }
-
-    if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') { toast.success('Bildirimlere izin verildi!'); }
-      });
-    }
-
-    const showNotification = (title: string, options: NotificationOptions) => {
-      if (Notification.permission !== 'granted') return;
- 
-      const canPlaySound = notificationSoundUrl !== 'none' && audioContext && audioContext.state === 'running';
-
-      if (canPlaySound) {
-        try {
-          const notificationSound = new Audio(notificationSoundUrl);
-          const playPromise = notificationSound.play();
-
-          if (playPromise !== undefined) {
-            playPromise.catch(error => {
-               console.error("Bildirim sesi çalma hatası (tarayıcı engellemiş olabilir):", error);
-                audioContext?.resume();
-            });
-          }
-          new Notification(title, { ...options, silent: true });
-        } catch (e) {
-          console.error("Audio nesnesi oluşturulurken veya çalınırken hata:", e);
-          new Notification(title, { ...options, silent: true });
-        }
-      } else {
-        new Notification(title, { ...options, silent: notificationSoundUrl === 'none' });
-      }
-    };
-    
-    const channel = supabase.channel('leave-request-notifications').on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, async (payload) => {
-      const { data: count, error } = await supabase.rpc('get_notification_count', { user_role: profile.role, user_region_id: profile.region_id });
-      if (!error) { setNotificationCount(count); }
-
-      if (payload.eventType === 'INSERT' && profile.role === 'coordinator') {
-        const newRequest = payload.new as { personnel_id: number };
-        const { data: personnel } = await supabase.from('personnel').select('region_id, full_name').eq('id', newRequest.personnel_id).single();
-   
-         if (personnel && personnel.region_id === profile.region_id) {
-          showNotification('Yeni İzin Talebi', { body: `${personnel.full_name} yeni bir izin talebinde bulundu.`, icon: '/favicon.ico' });
-        }
-      }
-
-      if (payload.eventType === 'UPDATE' && profile.role === 'admin') {
-        const updatedRequest = payload.new as { status: string, personnel_id: number };
-        const oldRequest = payload.old as { status: string };
-        const isApprovedByCoordinator = updatedRequest.status === 'approved_by_coordinator';
-        if (isApprovedByCoordinator && updatedRequest.status !== oldRequest.status) {
-           const { data: personnel } = await supabase.from('personnel').select('full_name').eq('id', updatedRequest.personnel_id).single();
-           const statusText = isApprovedByCoordinator ? 'onaylandı' : 'reddedildi';
-          showNotification(`Koordinatör İşlemi`, { body: `${personnel?.full_name || 'Bir personelin'} izin talebi koordinatör tarafından ${statusText}.`, icon: '/favicon.ico' });
-        }
-      }
-    }).subscribe();
-      
-    return () => { supabase.removeChannel(channel); };
-  }, [user, profile, notificationSoundUrl, audioContext, setNotificationCount]);
-
-  // DÜZELTME: isLoading değeri value objesine eklendi
+  
   const value = {
     supabase,
     user,
@@ -316,6 +231,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     playSound, 
     setNotificationSoundUrl,
   };
+
   return (
     <SettingsContext.Provider value={value}>
       {children}

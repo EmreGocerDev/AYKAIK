@@ -8,6 +8,7 @@ import { createLeaveRequest, login, type LoginState } from "./actions";
 import { aykaSocialLogin, aykaSocialRegister } from "./aykasosyal/actions"; 
 import toast from "react-hot-toast";
 import Image from "next/image";
+import Link from "next/link";
 
 
 // --- YARDIMCI BİLEŞENLER ---
@@ -46,7 +47,6 @@ function AykaSocialLoginRegisterForm() {
   const [loginState, loginAction] = useActionState(aykaSocialLogin, { success: false, message: '' });
   const [registerState, registerAction] = useActionState(aykaSocialRegister, { success: false, message: '' });
 
-  // Kayıt başarılı olduğunda kullanıcıyı bilgilendirip giriş moduna geçirelim
   useEffect(() => {
     if (registerState.success) {
       toast.success(registerState.message || "Kayıt başarılı!");
@@ -72,6 +72,9 @@ function AykaSocialLoginRegisterForm() {
         </form>
       ) : (
         <form action={registerAction} className="space-y-4">
+          {/* YENİ: T.C. Kimlik No alanı eklendi */}
+          <input name="tc_kimlik_no" required maxLength={11} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="T.C. Kimlik Numaranız" />
+          
           <input name="full_name" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Adınız Soyadınız" />
           <input name="username" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Kullanıcı Adı (benzersiz)" />
           <input type="email" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="E-posta Adresiniz" />
@@ -85,7 +88,7 @@ function AykaSocialLoginRegisterForm() {
         </form>
       )}
        <p className="text-center text-xs text-gray-400 mt-2">
-            <a href="#" className="hover:underline">Şifremi unuttum</a>
+            <Link href="/sifremi-unuttum" className="hover:underline">Şifremi unuttum</Link>
         </p>
     </div>
   );

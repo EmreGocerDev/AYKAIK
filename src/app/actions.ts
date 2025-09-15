@@ -1023,3 +1023,15 @@ async function createOrLoginSocialUserForMatrix(matrixUser: { id: string, email?
   }
 }
 
+export async function signOutUser() {
+  // AykaSosyal için oluşturduğumuz özel cookie'yi silelim
+  const cookieStore = await cookies(); // DÜZELTME: await eklendi
+  cookieStore.delete('aykasosyal_session');
+
+  // Supabase'in kendi oturumunu (İK Portalı) kapatalım
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  
+  // Kullanıcıyı ana giriş sayfasına yönlendirelim
+  redirect('/');
+}

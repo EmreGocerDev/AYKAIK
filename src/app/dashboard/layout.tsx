@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from 'react'; // useEffect'i import edin
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import SettingsModal from '@/components/SettingsModal';
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { Menu } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
-import { useRouter } from 'next/navigation';
+import { signOutUser } from '@/app/actions'; 
+import { useRouter } from 'next/navigation'; // useRouter importu eklendi
 
 const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
   <div className={`loader-screen ${!isLoading ? 'hidden' : ''}`}>
@@ -15,34 +16,31 @@ const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
   </div>
 );
 
+// DÜZELTME: React.Node -> React.ReactNode olarak değiştirildi
 function DashboardContainer({ children }: { children: React.ReactNode }) {
-  
-  const { supabase, bg, isLoading, playSound } = useSettings();
+  const { bg, isLoading, playSound, profile } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const router = useRouter();
-
-  // DÜZELTME: Hydration hatasını önlemek için eklendi
   const [isMounted, setIsMounted] = useState(false);
+  const router = useRouter(); // router'ı burada tanımlıyoruz
+
   useEffect(() => {
     setIsMounted(true);
-    
   }, []);
-useEffect(() => {
-    // Yükleme bittiğinde VE ses daha önce bu oturumda çalınmadıysa sesi çal
+
+  useEffect(() => {
     const welcomeSoundPlayed = sessionStorage.getItem('welcomeSoundPlayed');
     if (!isLoading && !welcomeSoundPlayed) {
       playSound('/sounds/login-success.mp3');
       sessionStorage.setItem('welcomeSoundPlayed', 'true');
     }
-  }, [isLoading, playSound]); 
+  }, [isLoading, playSound]);
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+    await signOutUser();
   };
 
-  // DÜZELTME: Sayfa mount olmadan LoadingScreen'i gösterme
   if (!isMounted) {
     return (
       <div className="loader-screen">
@@ -77,19 +75,22 @@ useEffect(() => {
           </main>
         </div>
 
-        {/* Floating action buttons */}
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
           <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border-white/20 shadow-md transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
           </button>
-          <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </button>
+          
+          {profile && (
+            <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          )}
         </div>
 
         {settingsOpen && (
          <SettingsModal onClose={() => setSettingsOpen(false)} />
        )}
+      
       </div>
     </>
   );
@@ -101,4 +102,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <DashboardContainer>{children}</DashboardContainer>
     </SettingsProvider>
   );
-} 
+}
