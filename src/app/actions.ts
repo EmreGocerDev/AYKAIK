@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 // GÜNCELLEME: Güvenli tarih fonksiyonumuzu import ediyoruz.
 import { safeNewDate } from '@/lib/utils';
-
+import { cookies } from 'next/headers'; 
 import { createPerformanceClient } from '@/lib/supabase/performance';
 import type { DailyPerformanceRecord } from '@/types/index';
 
@@ -110,17 +110,23 @@ export async function login(prevState: LoginState, formData: FormData) {
   const password = formData.get('password') as string;
   const supabase = createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
-    
     return {
       message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
     };
   }
+
+  // YENİ EKLENEN BÖLÜM BAŞLANGICI
+  if (data.user) {
+    // Giriş başarılıysa, AykaSosyal hesabını oluştur/kontrol et ve session başlat
+    await createOrLoginSocialUserForMatrix(data.user);
+  }
+  // YENİ EKLENEN BÖLÜM SONU
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');
@@ -971,3 +977,49 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
         return { success: false, message: `Rapor oluşturulamadı: ${message}` };
     }
 }
+
+async function createOrLoginSocialUserForMatrix(matrixUser: { id: string, email?: string, user_metadata: { [key: string]: any } }) {
+  const adminSupabase = createAdminClient();
+
+  // 1. Mevcut bir sosyal medya hesabı var mı diye kontrol et
+  let { data: socialUser } = await adminSupabase
+    .from('social_users')
+    .select('id')
+    .eq('matrix_user_id', matrixUser.id)
+    .single();
+
+  // 2. Eğer sosyal medya hesabı yoksa, oluştur
+  if (!socialUser) {
+    const { data: newSocialUser, error } = await adminSupabase
+      .from('social_users')
+      .insert({
+        matrix_user_id: matrixUser.id,
+        email: matrixUser.email || 'email-yok@ayka.com', // E-posta zorunlu olduğu için
+        full_name: matrixUser.user_metadata.full_name || 'İsimsiz Kullanıcı',
+        // Kullanıcı adı e-postanın @'den önceki kısmı olabilir, veya rastgele
+        username: matrixUser.email?.split('@')[0] || `kullanici_${Math.random().toString(36).substring(2, 8)}`,
+        // Bu hesaplar şifre ile giriş yapmayacağı için password_hash'i geçici bir değerle dolduruyoruz.
+        password_hash: '$2a$10$NotRealPasswordHashForMatrixUser'
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Otomatik sosyal hesap oluşturma hatası:", error);
+      return; // Hata olsa bile ana girişi engelleme
+    }
+    socialUser = newSocialUser;
+  }
+  
+  // 3. AykaSosyal için session cookie'sini oluştur
+  if (socialUser) {
+    const sessionData = { userId: socialUser.id };
+    (await cookies()).set('aykasosyal_session', JSON.stringify(sessionData), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7, // 1 hafta
+        path: '/',
+    });
+  }
+}
+
