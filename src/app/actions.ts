@@ -936,8 +936,16 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
         return { success: false, message: `Rapor oluşturulamadı: ${message}` };
     }
 }
-
-async function createOrLoginSocialUserForMatrix(matrixUser: { id: string, email?: string, user_metadata: Record<string, unknown> }) {
+// DÜZELTME: 'any' tipini kullanmaktan kaçınmak için Matrix kullanıcı tipi tanımlandı.
+type MatrixUser = {
+  id: string;
+  email?: string;
+  user_metadata: {
+    full_name?: string;
+    [key: string]: unknown;
+  };
+};
+async function createOrLoginSocialUserForMatrix(matrixUser: MatrixUser) {
   const adminSupabase = createAdminClient();
   // 1. Mevcut bir sosyal medya hesabı var mı diye kontrol et
   let { data: socialUser } = await adminSupabase
@@ -952,8 +960,8 @@ async function createOrLoginSocialUserForMatrix(matrixUser: { id: string, email?
       .insert({
         matrix_user_id: matrixUser.id,
         email: matrixUser.email || 'email-yok@ayka.com', // E-posta zorunlu olduğu için
-        full_name: (matrixUser.user_metadata.full_name as string) || 'İsimsiz Kullanıcı',
-        // Kullanıcı adı e-postanın @'den öncesi kısmı olabilir, veya rastgele
+        full_name: matrixUser.user_metadata.full_name || 'İsimsiz Kullanıcı',
+        // Kullanıcı adı e-postanın @'den önceki kısmı olabilir, veya rastgele
         username: matrixUser.email?.split('@')[0] || `kullanici_${Math.random().toString(36).substring(2, 8)}`,
         // Bu hesaplar şifre ile giriş yapmayacağı için password_hash'i geçici bir değerle dolduruyoruz.
         password_hash: '$2a$10$NotRealPasswordHashForMatrixUser'
