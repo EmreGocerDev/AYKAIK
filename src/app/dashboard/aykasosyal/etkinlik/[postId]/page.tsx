@@ -3,10 +3,19 @@ import GlassCard from "@/components/GlassCard";
 import { Calendar, MapPin, Users, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+// YENİ: Katılımcı verisi için bir tip tanımı oluşturuldu
+type Attendee = {
+    user_id: string;
+    full_name: string;
+    username: string;
+    region_name: string | null;
+};
+
 export default async function EventDetailPage({ params }: { params: { postId: string } }) {
     const postId = Number(params.postId);
     if (isNaN(postId)) {
-        return <div className="p-8 text-white text-center">Geçersiz Etkinlik ID'si.</div>;
+        // DÜZELTME: ' işaretinden kaynaklanan hatayı gidermek için &apos; kullanıldı
+        return <div className="p-8 text-white text-center">Geçersiz Etkinlik ID&apos;si.</div>;
     }
 
     const data = await getEventDetails(postId);
@@ -46,7 +55,6 @@ export default async function EventDetailPage({ params }: { params: { postId: st
                     <ArrowLeft size={16} /> Akışa Geri Dön
                 </Link>
                 
-                {/* DÜZENLEME: Ana etkinlik kartına sabit stil eklendi */}
                 <GlassCard 
                     className="mb-8"
                     tintValue={-5}
@@ -69,7 +77,6 @@ export default async function EventDetailPage({ params }: { params: { postId: st
                     {post.content && <p className="mt-4 text-gray-300 bg-black/20 p-4 rounded-lg">{post.content}</p>}
                 </GlassCard>
 
-                {/* DÜZENLEME: Katılımcı listesi kartına da sabit stil eklendi */}
                 <GlassCard
                     tintValue={-5}
                     blurPx={16}
@@ -81,7 +88,8 @@ export default async function EventDetailPage({ params }: { params: { postId: st
                     </h2>
                     <div className="space-y-3">
                         {attendees && attendees.length > 0 ? (
-                            attendees.map((attendee: any) => (
+                            // DÜZELTME: 'any' yerine oluşturduğumuz Attendee tipi kullanıldı
+                            attendees.map((attendee: Attendee) => (
                                 <Link key={attendee.user_id} href={`/dashboard/aykasosyal/profil/${attendee.username}`}>
                                     <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
                                         <div className="w-10 h-10 bg-gray-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-cyan-300">

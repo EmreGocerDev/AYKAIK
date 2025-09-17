@@ -10,13 +10,16 @@ import crypto from 'crypto';
 
 import { Resend } from 'resend';
 import PasswordResetEmail from '@/components/emails/PasswordResetEmail';
-
 // YENİ: Resend istemcisini başlat
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 
 const SESSION_COOKIE_NAME = 'aykasosyal_session';
 
+type ActionState = {
+    success: boolean;
+    message: string;
+};
 // =================================================================
 // HELPER (YARDIMCI) FONKSİYON
 // =================================================================
@@ -46,7 +49,7 @@ async function getSocialUser() {
 // AUTH (KULLANICI GİRİŞ/KAYIT) FONKSİYONLARI
 // =================================================================
 // ... (aykaSocialRegister, aykaSocialLogin, aykaSocialLogout fonksiyonları burada, değişmedi)
-export async function aykaSocialRegister(prevState: any, formData: FormData) {
+export async function aykaSocialRegister(prevState: ActionState, formData: FormData) {
     const supabase = createAdminClient();
     const rawFormData = {
         tc_kimlik_no: formData.get('tc_kimlik_no') as string,
@@ -55,7 +58,6 @@ export async function aykaSocialRegister(prevState: any, formData: FormData) {
         email: formData.get('email') as string,
         password: formData.get('password') as string,
     };
-
     if (!rawFormData.tc_kimlik_no || !rawFormData.full_name || !rawFormData.username || !rawFormData.email || !rawFormData.password) {
         return { success: false, message: 'Tüm alanlar zorunludur.' };
     }
@@ -66,25 +68,22 @@ export async function aykaSocialRegister(prevState: any, formData: FormData) {
         .select('tc_kimlik_no')
         .eq('tc_kimlik_no', rawFormData.tc_kimlik_no)
         .single();
-
     if (personnelError || !personnel) {
         return { success: false, message: 'Bu T.C. Kimlik Numarası sistemde kayıtlı bir personele ait değildir.' };
     }
 
     // 2. KONTROL: Bu TC ile daha önce sosyal hesap açılmış mı?
-    const { data: existingSocialUser, error: socialUserError } = await supabase
+    const { data: existingSocialUser } = await supabase
         .from('social_users')
         .select('id')
         .eq('tc_kimlik_no', rawFormData.tc_kimlik_no)
         .single();
-
     if (existingSocialUser) {
         return { success: false, message: 'Bu T.C. Kimlik Numarası ile zaten bir AykaSosyal hesabı oluşturulmuş.' };
     }
 
     // KONTROLLER TAMAM, YENİ KULLANICIYI OLUŞTUR
     const password_hash = await bcrypt.hash(rawFormData.password, 10);
-
     const { error: insertError } = await supabase.from('social_users').insert({
         tc_kimlik_no: rawFormData.tc_kimlik_no, // TC'yi de ekliyoruz
         full_name: rawFormData.full_name,
@@ -92,7 +91,6 @@ export async function aykaSocialRegister(prevState: any, formData: FormData) {
         email: rawFormData.email,
         password_hash: password_hash
     });
-
     if (insertError) {
         if (insertError.code === '23505') { // unique constraint violation
             // Bu hata username veya email için de gelebilir
@@ -103,7 +101,7 @@ export async function aykaSocialRegister(prevState: any, formData: FormData) {
 
     return { success: true, message: 'Personel doğrulaması başarılı! Kaydınız oluşturuldu. Şimdi giriş yapabilirsiniz.' };
 }
-export async function aykaSocialLogin(prevState: any, formData: FormData) {
+export async function aykaSocialLogin(prevState: ActionState, formData: FormData) {
     const supabase = createAdminClient();
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
@@ -217,7 +215,7 @@ export async function getSocialProfileForEdit() {
         region_id: user.region_id
     };
 }
-export async function updateSocialProfile(prevState: any, formData: FormData) {
+export async function updateSocialProfile(prevState: ActionState, formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
     const rawFormData = {
@@ -320,7 +318,6 @@ export async function toggleRsvpToEvent(postId: number) {
 // getEventDetails fonksiyonu güncellendi
 export async function getEventDetails(postId: number) {
     const supabase = createClient();
-
     const { data: postData, error: postError } = await supabase
         .from('social_posts')
         .select(`
@@ -331,7 +328,6 @@ export async function getEventDetails(postId: number) {
         .eq('id', postId)
         .eq('post_type', 'event')
         .single();
-
     // DÜZELTME: Hata kontrolü daha güvenli hale getirildi.
     // Artık event listesinin boş olup olmadığını kontrol ediyoruz.
     if (postError || !postData || !postData.event || postData.event.length === 0) {
@@ -341,7 +337,6 @@ export async function getEventDetails(postId: number) {
 
     const { data: attendeesData, error: attendeesError } = await supabase
         .rpc('get_event_attendees', { p_post_id: postId });
-
     if (attendeesError) {
         console.error("Katılımcı listesi çekme hatası:", attendeesError);
         return { post: postData, attendees: [] }; // Katılımcılar olmasa da sayfa çalışsın
@@ -352,7 +347,7 @@ export async function getEventDetails(postId: number) {
         attendees: attendeesData
     };
 }
-export async function requestPasswordReset(prevState: any, formData: FormData) {
+export async function requestPasswordReset(prevState: ActionState, formData: FormData) {
     const email = formData.get('email') as string;
     if (!email) {
         return { success: false, message: 'Lütfen e-posta adresinizi girin.' };
@@ -360,7 +355,6 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
 
     const supabase = createAdminClient();
     const { data: user } = await supabase.from('social_users').select('id').eq('email', email).single();
-    
     if (user) {
         // Kullanıcı varsa token oluştur ve e-posta gönder
         const token = crypto.randomBytes(32).toString('hex');
@@ -372,20 +366,19 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
             token_hash: token_hash,
             expires_at: expires_at.toISOString()
         });
-
         if (tokenError) {
             return { success: false, message: 'Şifre sıfırlama talebi oluşturulamadı. Lütfen tekrar deneyin.' };
         }
 
         // YENİ: Gerçek E-posta Gönderme Kodu
         const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/sifre-sifirla?token=${token}`;
-        
         try {
             await resend.emails.send({
                 from: 'AykaSosyal <onboarding@resend.dev>', // Test için bu adresi kullanıyoruz
                 to: email,
                 subject: 'AykaSosyal Şifre Sıfırlama Talebi',
                 react: PasswordResetEmail({ resetLink }),
+      
             });
         } catch (error) {
             console.error("E-posta gönderme hatası:", error);
@@ -398,9 +391,8 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
     return { success: true, message: 'Eğer bu e-posta adresi sistemimizde kayıtlıysa, şifre sıfırlama bağlantısı gönderilmiştir.' };
 }
 
-export async function resetPassword(prevState: any, formData: FormData) {
+export async function resetPassword(prevState: ActionState, formData: FormData) {
     const { password, confirmPassword, token } = Object.fromEntries(formData);
-
     if (!password || !token || password !== confirmPassword) {
         return { success: false, message: 'Şifreler eşleşmiyor veya eksik bilgi var.' };
     }
@@ -411,14 +403,12 @@ export async function resetPassword(prevState: any, formData: FormData) {
     const hashedToken = crypto.createHash('sha256').update(token as string).digest('hex');
 
     const supabase = createAdminClient();
-    
     // 1. Token veritabanında var mı ve geçerli mi?
     const { data: tokenData } = await supabase
         .from('social_password_reset_tokens')
         .select('user_id, expires_at')
         .eq('token_hash', hashedToken)
         .single();
-        
     if (!tokenData || new Date() > new Date(tokenData.expires_at)) {
         return { success: false, message: 'Bu şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.' };
     }
@@ -429,7 +419,6 @@ export async function resetPassword(prevState: any, formData: FormData) {
         .from('social_users')
         .update({ password_hash: newPasswordHash })
         .eq('id', tokenData.user_id);
-
     if (updateError) {
         return { success: false, message: 'Şifre güncellenirken bir hata oluştu.' };
     }
@@ -437,7 +426,8 @@ export async function resetPassword(prevState: any, formData: FormData) {
     // 3. Kullanılmış token'ı sil
     await supabase.from('social_password_reset_tokens').delete().eq('token_hash', hashedToken);
 
-    redirect('/'); // Başarılı olunca ana sayfaya (giriş ekranına) yönlendir.
+    redirect('/');
+    // Başarılı olunca ana sayfaya (giriş ekranına) yönlendir.
 }
 // ... dosyanızdaki diğer tüm fonksiyonların altına ekleyin
 
@@ -483,7 +473,6 @@ export async function deleteSocialComment(commentId: number) {
         .delete()
         .eq('id', commentId)
         .eq('user_id', user.id);
-
     if (error) {
         return { success: false, message: 'Yorum silinirken bir hata oluştu.' };
     }

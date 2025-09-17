@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useActionState } from "react"; 
+import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import GlassCard from "@/components/GlassCard";
 import { createLeaveRequest, login, type LoginState } from "./actions";
@@ -9,8 +9,6 @@ import { aykaSocialLogin, aykaSocialRegister } from "./aykasosyal/actions";
 import toast from "react-hot-toast";
 import Image from "next/image";
 import Link from "next/link";
-
-
 // --- YARDIMCI BİLEŞENLER ---
 
 // İK Portalı için Giriş Butonu
@@ -43,32 +41,31 @@ function AykaSocialSubmitButton({ mode }: { mode: 'login' | 'register' }) {
 // AykaSosyal için tam işlevsel form bileşeni
 function AykaSocialLoginRegisterForm() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  
   const [loginState, loginAction] = useActionState(aykaSocialLogin, { success: false, message: '' });
   const [registerState, registerAction] = useActionState(aykaSocialRegister, { success: false, message: '' });
-
   useEffect(() => {
     if (registerState.success) {
       toast.success(registerState.message || "Kayıt başarılı!");
       setMode('login');
     }
   }, [registerState]);
-
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-bold text-center text-white">
-        AykaSosyal'e {mode === 'login' ? 'Giriş Yap' : 'Kayıt Ol'}
+        AykaSosyal&apos;e {mode === 'login' ? 'Giriş Yap' : 'Kayıt Ol'}
       </h3>
       {mode === 'login' ? (
         <form action={loginAction} className="space-y-4">
           <input type="email" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="E-posta Adresiniz" />
-          <input type="password" name="password" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Şifreniz" />
+          <input type="password" name="password" required 
+          className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Şifreniz" />
           {loginState?.message && !loginState.success && <p className="text-sm text-red-400 text-center">{loginState.message}</p>}
           <AykaSocialSubmitButton mode="login" />
           <p className="text-center text-sm text-gray-300">
             Hesabın yok mu?{' '}
             <button type="button" onClick={() => setMode('register')} className="font-semibold text-cyan-400 hover:underline">Kayıt Ol</button>
           </p>
+ 
         </form>
       ) : (
         <form action={registerAction} className="space-y-4">
@@ -77,11 +74,13 @@ function AykaSocialLoginRegisterForm() {
           
           <input name="full_name" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Adınız Soyadınız" />
           <input name="username" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Kullanıcı Adı (benzersiz)" />
-          <input type="email" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="E-posta Adresiniz" />
+     
+           <input type="email" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="E-posta Adresiniz" />
           <input type="password" name="password" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Şifreniz" />
           {registerState?.message && !registerState.success && <p className="text-sm text-red-400 text-center">{registerState.message}</p>}
           <AykaSocialSubmitButton mode="register" />
           <p className="text-center text-sm text-gray-300">
+          
             Zaten bir hesabın var mı?{' '}
             <button type="button" onClick={() => setMode('login')} className="font-semibold text-cyan-400 hover:underline">Giriş Yap</button>
           </p>
@@ -160,7 +159,6 @@ console.log("AYKA ENERJI PORTAL IS FULLY OPERATIONAL.");
 console.log("SYSTEM READY. AWAITING USER AUTHENTICATION...");
 // Copyright Ayka Enerji © 2025
 `;
-
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"personel" | "yetkili" | "aykasosyal">("personel");
   const [personnelFormKey, setPersonnelFormKey] = useState(0);
@@ -168,7 +166,6 @@ export default function LoginPage() {
   const [personnelEmail, setPersonnelEmail] = useState("");
   const [displayedCode, setDisplayedCode] = useState("");
   const [isTypingComplete, setIsTypingComplete] = useState(false);
-
   useEffect(() => {
     let currentIndex = 0;
     let isMounted = true; 
@@ -187,7 +184,8 @@ export default function LoginPage() {
             deleted++;
             setTimeout(backspace, 40);
           } else {
-           setTimeout(type, 300);
+     
+            setTimeout(type, 300);
           }
         };
         setTimeout(backspace, 150);
@@ -210,10 +208,8 @@ export default function LoginPage() {
       isMounted = false;
     };
   }, []);
-
   const initialState: LoginState = { message: null };
   const [loginState, loginFormAction] = useActionState(login, initialState);
-
   const handleLeaveRequestSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -228,7 +224,6 @@ export default function LoginPage() {
       toast.error(result.message);
     }
   };
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
       <div 
@@ -239,6 +234,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 z-0 overflow-hidden">
         <pre className={`text-green-400 text-xs sm:text-sm md:text-md lg:text-lg opacity-50 font-mono whitespace-pre-wrap typing-code ${isTypingComplete ? '' : 'typing-cursor'}`}>
           {displayedCode}
+     
         </pre>
       </div>
 
@@ -249,6 +245,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-8">
             <Image
               src="/sidebarlogo.png"
+            
               alt="Portal Logosu"
               width={240}
               height={66}
@@ -257,6 +254,7 @@ export default function LoginPage() {
           <div className="flex bg-white/10 rounded-lg p-1 mb-6">
             <button 
               onClick={() => setActiveTab("personel")} 
+  
               className={`w-full p-2 rounded-md text-sm font-medium transition-colors ${activeTab === "personel" ? "bg-white/20 text-white" : "text-gray-300 hover:bg-white/5"}`}
             >
               İzin Talebi
@@ -279,30 +277,36 @@ export default function LoginPage() {
               <div>
                 <label htmlFor="tc" className="block text-sm font-medium text-gray-200 mb-1">T.C. Kimlik Numarası</label>
                 <input type="text" id="tc" name="tc" maxLength={11} required value={tc} onChange={(e) => setTc(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="11 haneli T.C. kimlik numaranız" />
+     
               </div>
               <div>
                 <label htmlFor="email_personel" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
                 <input type="email" id="email_personel" name="email_personel" required value={personnelEmail} onChange={(e) => setPersonnelEmail(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="sistemde kayıtlı e-postanız" />
               </div>
+ 
               <div>
                 <label htmlFor="leave_type" className="block text-sm font-medium text-gray-200 mb-1">İzin Türü</label>
                 <select name="leave_type" id="leave_type" required className="w-full bg-black/20 p-3 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                   <option value="">Seçiniz...</option>
+                 
                   <option value="yıllık izin">Yıllık İzin</option>
                   <option value="ücretli izin">Ücretli İzin (Mazeret)</option>
                   <option value="ücretsiz izin">Ücretsiz İzin</option>
                   <option value="raporlu">Raporlu (İstirahat)</option>
                 </select>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4">
+   
+               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="w-full sm:w-1-2">
                   <label htmlFor="start_date" className="block text-sm font-medium text-gray-200 mb-1">Başlangıç Tarihi</label>
                   <input name="start_date" id="start_date" type="date" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none [color-scheme:dark]" />
+       
                 </div>
                 <div className="w-full sm:w-1/2">
                   <label htmlFor="end_date" className="block text-sm font-medium text-gray-200 mb-1">Bitiş Tarihi</label>
                   <input name="end_date" id="end_date" type="date" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none [color-scheme:dark]" />
-                </div>
+             
+       </div>
               </div>
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">
                 İzin Talebi Oluştur
@@ -313,12 +317,14 @@ export default function LoginPage() {
                 <div>
                   <label htmlFor="email_yetkili" className="block text-sm font-medium text-gray-200 mb-1">E-posta Adresi</label>
                   <input type="email" id="email_yetkili" name="email" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="ornek@sirket.com" />
-                </div>
+           
+           </div>
                 <div>
                   <label htmlFor="password"  className="block text-sm font-medium text-gray-200 mb-1">Şifre</label>
                   <input type="password" id="password" name="password" required className="w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
                 </div>
-                {loginState?.message && <p className="text-sm text-red-400 text-center">{loginState.message}</p>}
+   
+              {loginState?.message && <p className="text-sm text-red-400 text-center">{loginState.message}</p>}
                 <LoginSubmitButton />
              </form>
           ) : (
@@ -326,6 +332,7 @@ export default function LoginPage() {
           )}
         </GlassCard>
       </main>
-    </div>
+   
+   </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MessageCircle, Calendar, MapPin, UserCheck, Send, Users, MoreHorizontal, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Calendar, MapPin, Send, Users, Trash2 } from "lucide-react";
 import { useState, useTransition, useRef } from "react";
 import { toggleSocialLike, toggleRsvpToEvent, addSocialComment, deleteSocialPost, deleteSocialComment } from "@/app/aykasosyal/actions";
 import toast from "react-hot-toast";
@@ -53,10 +53,40 @@ export default function PostCard({ post, currentUserId, onActionSuccess }: PostC
     const [showComments, setShowComments] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
 
-    const handleLikeClick = () => { /* ... aynı ... */ };
-    const handleRsvpClick = () => { /* ... aynı ... */ };
-    const handleCommentSubmit = async (formData: FormData) => { /* ... aynı ... */ };
+    const handleLikeClick = () => {
+        startLikeTransition(async () => {
+            const result = await toggleSocialLike(post.post_id);
+            if (result.success) {
+                onActionSuccess();
+            } else {
+                toast.error(result.message || "Beğenme işlemi başarısız.");
+            }
+        });
+    };
 
+    const handleRsvpClick = () => {
+        startRsvpTransition(async () => {
+            const result = await toggleRsvpToEvent(post.post_id);
+            if (result.success) {
+                onActionSuccess();
+            } else {
+                toast.error(result.message || "Katılım işlemi başarısız.");
+            }
+        });
+    };
+
+    const handleCommentSubmit = async (formData: FormData) => {
+        startCommentTransition(async () => {
+            const result = await addSocialComment(post.post_id, formData);
+            if (result.success) {
+                formRef.current?.reset();
+                onActionSuccess();
+            } else {
+                toast.error(result.message || "Yorum eklenemedi.");
+            }
+        });
+    };
+    
     const handleDeletePost = () => {
         if (window.confirm("Bu gönderiyi kalıcı olarak silmek istediğinizden emin misiniz?")) {
             startDeleteTransition(async () => {
@@ -85,47 +115,55 @@ export default function PostCard({ post, currentUserId, onActionSuccess }: PostC
         }
     };
 
-    const formattedEventDate = post.event_details ? new Date(post.event_details.event_datetime).toLocaleString('tr-TR', {
+    const formattedEventDate = post.event_details ?
+        new Date(post.event_details.event_datetime).toLocaleString('tr-TR', {
         dateStyle: 'full',
         timeStyle: 'short'
     }) : '';
-
     return (
         <div className="flex items-start gap-4">
             <div className="w-10 h-10 bg-gray-700 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-cyan-300 hover:opacity-90 transition-opacity">
                 <Link href={`/dashboard/aykasosyal/profil/${post.author_username}`}>
                     {post.author_full_name.charAt(0)}
                 </Link>
-            </div>
+           
+             </div>
             <div className="flex-1">
                 <div className="flex justify-between items-start">
                     <div className="flex items-baseline gap-2 flex-wrap">
                         <Link href={`/dashboard/aykasosyal/profil/${post.author_username}`}><p className="font-bold text-white hover:underline cursor-pointer">{post.author_full_name}</p></Link>
-                        <Link href={`/dashboard/aykasosyal/profil/${post.author_username}`}><p className="text-sm text-gray-400">@{post.author_username}</p></Link>
+              
+                         <Link href={`/dashboard/aykasosyal/profil/${post.author_username}`}><p className="text-sm text-gray-400">@{post.author_username}</p></Link>
                         <span className="text-sm text-gray-500">·</span>
                         <p className="text-sm text-gray-500">{timeSince(post.post_created_at)}</p>
                     </div>
-                    {post.author_id === currentUserId && (
+               
+                     {post.author_id === currentUserId && (
                         <button onClick={handleDeletePost} disabled={isDeleting} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors">
                             <Trash2 size={16}/>
                         </button>
-                    )}
+      
+                     )}
                 </div>
                 
-                {post.post_type === 'event' && post.event_details ? (
+                {post.post_type === 'event' && post.event_details ?
+(
                     <div className="mt-2 border-l-4 border-cyan-500 pl-4 py-2 bg-black/20 rounded-r-lg">
                         <h3 className="font-bold text-lg text-white">{post.event_details.title}</h3>
                         <p className="text-gray-300 my-2">{post.post_content}</p>
-                        <div className="space-y-2 text-sm">
+                    
+                         <div className="space-y-2 text-sm">
                             <p className="flex items-center gap-2"><Calendar size={16} className="text-cyan-400"/> {formattedEventDate}</p>
                             {post.event_details.location && <p className="flex items-center gap-2"><MapPin size={16} className="text-cyan-400"/> {post.event_details.location}</p>}
+                        
                         </div>
                     </div>
                 ) : (
                     <p className="mt-1 text-gray-200 whitespace-pre-wrap">{post.post_content}</p>
                 )}
                 
-                <div className="flex items-center gap-6 mt-4 text-gray-400">
+       
+                 <div className="flex items-center gap-6 mt-4 text-gray-400">
                     <button onClick={handleLikeClick} disabled={isLiking} className={`flex items-center gap-2 hover:text-red-500 transition-colors ${post.is_liked_by_user ? 'text-red-500' : ''}`}>
                         <Heart size={18} fill={post.is_liked_by_user ? 'currentColor' : 'none'} /> {post.like_count}
                     </button>
@@ -134,48 +172,63 @@ export default function PostCard({ post, currentUserId, onActionSuccess }: PostC
                     </button>
                     {post.post_type === 'event' && (
                          <div className="flex items-center gap-4">
+                            
                             <Link href={`/dashboard/aykasosyal/etkinlik/${post.post_id}`} className="hover:underline text-gray-400 hover:text-white transition-colors">
                                 <span className="flex items-center gap-2">
                                     <Users size={18}/> {post.rsvp_count} Katılımcı
-                                </span>
+                     
+                               </span>
                             </Link>
                             <button onClick={handleRsvpClick} disabled={isRsvping} className={`px-3 py-1 text-xs rounded-full transition-colors ${post.is_rsvpd_by_user ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30 font-semibold' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}>
-                                {isRsvping ? '...' : (post.is_rsvpd_by_user ? 'Katılıyorsun' : 'Katıl')}
+                
+                                 {isRsvping ? '...' : (post.is_rsvpd_by_user ? 'Katılıyorsun' : 'Katıl')}
                             </button>
                         </div>
                     )}
-                </div>
+    
+                 </div>
 
                 {showComments && (
                     <div className="mt-4 pt-4 border-t border-white/10 animate-in fade-in duration-300">
                         <form action={handleCommentSubmit} ref={formRef} className="flex items-center gap-2 mb-4">
-                            <input name="content" type="text" placeholder="Yorumunu ekle..." required className="flex-1 bg-black/20 p-2 rounded-lg border border-white/10 text-sm" />
+             
+                             <input name="content" type="text" placeholder="Yorumunu ekle..." required className="flex-1 bg-black/20 p-2 rounded-lg border border-white/10 text-sm" />
                             <button type="submit" disabled={isCommenting} className="p-2 bg-cyan-600 rounded-lg hover:bg-cyan-700 disabled:opacity-50">
                                 <Send size={16} />
-                            </button>
+   
+                             </button>
                         </form>
 
                         <div className="space-y-3">
-                            {post.comments?.map(comment => (
+                          
+                           {post.comments?.map(comment => (
                                 <div key={comment.id} className="group flex items-start gap-2 text-sm">
                                     <div className="w-6 h-6 mt-1 bg-gray-600 rounded-full flex-shrink-0 items-center justify-center font-bold text-cyan-200 text-xs hidden sm:flex">{comment.author.full_name.charAt(0)}</div>
-                                    <div className="bg-black/20 p-2 rounded-lg flex-1 flex justify-between items-start">
+         
+                                     <div className="bg-black/20 p-2 rounded-lg flex-1 flex justify-between items-start">
                                         <div>
-                                            <div className="flex items-baseline gap-2">
+                          
+                                           <div className="flex items-baseline gap-2">
                                                 <p className="font-semibold text-white">{comment.author.full_name}</p>
-                                                <p className="text-xs text-gray-500">{timeSince(comment.created_at)}</p>
+                             
+                                                 <p className="text-xs text-gray-500">{timeSince(comment.created_at)}</p>
                                             </div>
-                                            <p className="text-gray-300">{comment.content}</p>
+                                   
+                                             <p className="text-gray-300">{comment.content}</p>
                                         </div>
                                         {comment.author.id === currentUserId && (
-                                            <button onClick={() => handleDeleteComment(comment.id)} disabled={isDeleting} className="p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+      
+                                               <button onClick={() => handleDeleteComment(comment.id)} disabled={isDeleting} className="p-1 text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Trash2 size={14} />
-                                            </button>
+  
+                                               </button>
                                         )}
-                                    </div>
+                  
+                                     </div>
                                 </div>
                             ))}
-                        </div>
+                      
+                       </div>
                     </div>
                 )}
             </div>
