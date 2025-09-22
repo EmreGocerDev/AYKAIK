@@ -1,3 +1,5 @@
+// YOL: src/app/dashboard/calendar/page.tsx [cite: 890]
+
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
@@ -28,10 +30,12 @@ type CalendarEvent = {
     originalRequest?: LeaveRequest;
   }
 };
+
 type Personnel = {
   id: number;
   full_name: string;
 };
+
 export default function CalendarPage() {
   const { supabase } = useSettings();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -59,8 +63,9 @@ export default function CalendarPage() {
         personnel_filter_id: personnelId ? Number(personnelId) : null,
         region_filter_id: null,
         search_query: null,
-        limit_val: 10000,
-        offset_val: 0
+        limit_val: 10000, // Takvimde tüm sonuçları görmek istiyoruz
+        offset_val: 0,
+        leave_type_filter: null,
       }),
       supabase.from('official_holidays').select('name, date')
     ]);
@@ -108,6 +113,7 @@ export default function CalendarPage() {
               originalRequest: req,
             }
         }));
+
         const holidayEvents: CalendarEvent[] = holidaysRes.data.map(holiday => ({
           title: holiday.name,
           start: holiday.date,
@@ -154,13 +160,13 @@ export default function CalendarPage() {
             <h1 className="text-3xl font-bold">Genel Takvim</h1>
             <div className='w-full md:w-auto'>
               <select
-                 value={selectedPersonnelId}
+                value={selectedPersonnelId}
                 onChange={(e) => setSelectedPersonnelId(e.target.value)}
                 className="w-full md:w-72 bg-black/20 py-2 px-4 rounded-lg border border-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">Tüm Personelleri Göster</option>
                 {personnelList.map(person => (
-                  <option key={person.id} value={person.id}>{person.full_name}</option>
+                   <option key={person.id} value={person.id}>{person.full_name}</option>
                 ))}
               </select>
             </div>

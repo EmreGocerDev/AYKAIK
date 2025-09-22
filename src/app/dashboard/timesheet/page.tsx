@@ -1,63 +1,80 @@
+// YOL: src/app/dashboard/timesheet/page.tsx
+
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
+import { useEffect, useState, useCallback, useMemo, MouseEvent } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
-import { ChevronLeft, ChevronRight, Filter, Search, X, FileDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, Search, X, FileDown, Save, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import GlassCard from '@/components/GlassCard';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { getOvertimeReport, saveTimesheetExtras } from '@/app/actions';
+import type { Personnel } from '@/types/index';
 
 const statusStyles = {
-    'çalıştı': { fullName: 'Çalıştı', abbr: 'Ç', className: 'bg-green-500/20 text-green-300' },
-    'yıllık izin': { fullName: 'Yıllık İzin', abbr: 'Yİ', className: 'bg-blue-500/20 text-blue-300' },
-    'ücretli izin': { fullName: 'Ücretli İzin', abbr: 'Üİ', className: 'bg-cyan-500/20 text-cyan-300' },
-    'ücretsiz izin': { fullName: 'Ücretsiz İzin', abbr: 'ÜZİ', className: 'bg-gray-500/20 text-gray-300' },
-    'raporlu': { fullName: 'Raporlu', abbr: 'R', className: 'bg-orange-500/20 text-orange-300' },
-    'resmi tatil': { fullName: 'Resmi Tatil', abbr: 'RT', className: 'bg-indigo-500/20 text-indigo-300' },
-    'hafta sonu': { fullName: 'Hafta Sonu', abbr: 'H', className: 'bg-gray-700/20 text-gray-500' },
+    'çalıştı': { fullName: 'Çalışılan Gün', abbr: 'X', count_as_work_day: 1 },
+    'yıllık izin': { fullName: 'Yıllık İzin', abbr: 'Yİ', count_as_work_day: 1 },
+    'ücretli izin': { fullName: 'Ücretli İzin', abbr: 'Üİ', count_as_work_day: 1 },
+    'ücretsiz izin': { fullName: 'Ücretsiz İzin', abbr: 'ÜZİ', count_as_work_day: 0 },
+    'raporlu': { fullName: 'Raporlu', abbr: 'R', count_as_work_day: 1 },
+    'resmi tatil': { fullName: 'Resmi Tatil', abbr: 'RT', count_as_work_day: 0 },
+    'hafta sonu': { fullName: 'Hafta Tatili', abbr: 'H', count_as_work_day: 0 },
 };
 
 type LeaveStatus = keyof typeof statusStyles;
-
 type ApprovedLeave = {
     personnel_id: number;
     start_date: string;
     end_date: string;
     leave_type: string;
 };
-
 type TimesheetData = {
     personnel_id: number;
     full_name: string;
     tc_kimlik_no: string;
-    regions: { name: string } | null;
-    approved_leaves: ApprovedLeave[];
+    ise_giris_tarihi: string | null;
+    daily_statuses: { [day: number]: LeaveStatus };
+    summary: { [key: string]: number | string };
+    missing_days: number | null;
+    additional_pay: number | null;
+    notes: string | null;
 };
+type PersonnelData = Pick<Personnel, 'id' | 'ADI SOYADI' | 'TC. KİMLİK NUMARASI' | 'KIDEM TARİHİ'>;
 
 type Region = { id: number; name: string; };
-type SummaryCounts = { [key in LeaveStatus]?: number };
-
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 
+const secondsToTimeString = (totalSeconds: number): string => {
+    if (totalSeconds <= 0) return "00:00";
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
 export default function TimesheetPage() {
-    const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity, profile, weekendConfiguration } = useSettings();
-    const [timesheetData, setTimesheetData] = useState<TimesheetData[]>([]);
-    const [holidays, setHolidays] = useState<Set<string>>(new Set());
-    const [dailyStatusCache, setDailyStatusCache] = useState<Map<string, LeaveStatus>>(new Map());
+    const { supabase, profile, weekendConfiguration } = useSettings();
+    const [initialData, setInitialData] = useState<TimesheetData[]>([]);
+    const [editedData, setEditedData] = useState<TimesheetData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [showWholeYear, setShowWholeYear] = useState(false);
     const [regions, setRegions] = useState<Region[]>([]);
     const [selectedRegion, setSelectedRegion] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [expandedPersonnelId, setExpandedPersonnelId] = useState<number | null>(null);
-    const [isExporting, setIsExporting] = useState(false);
-    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-    const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i), []);
-    const monthDays = useMemo(() => Array.from({ length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth()) }, (_, i) => i + 1), [currentDate]);
-    
+    const [isLegendOpen, setIsLegendOpen] = useState(false);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
+    const monthDays = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
+
+    const clearFilters = () => {
+        setSelectedRegion('');
+        setSearchQuery('');
+    };
+
     useEffect(() => {
         const fetchRegions = async () => {
             const { data, error } = await supabase.from('regions').select('id, name');
@@ -66,214 +83,258 @@ export default function TimesheetPage() {
         };
         fetchRegions();
     }, [supabase]);
-    
-    const handleYearChange = (year: number) => {
-        setCurrentDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setFullYear(year);
-            return newDate;
-        });
-    };
-    
-    const clearFilters = () => {
-        setSelectedRegion('');
-        setSearchQuery('');
-    };
-    
+
     const fetchTimesheet = useCallback(async (date: Date, regionId: string, search: string) => {
+        if (!profile) return;
         setLoading(true);
+
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const monthStartDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
+        const monthEndDate = new Date(Date.UTC(year, month + 1, 0)).toISOString().split('T')[0];
+
         try {
-            if (!profile) { setLoading(false); return; }
-
-            let personnelQuery = supabase.from('personnel').select('id, full_name, tc_kimlik_no, regions(name)');
-            if (profile.role === 'coordinator') personnelQuery = personnelQuery.eq('region_id', profile.region_id);
-            if (regionId) personnelQuery = personnelQuery.eq('region_id', Number(regionId));
- 
-            if (search) personnelQuery = personnelQuery.ilike('full_name', `%${search}%`);
-
-            const { data: personnelData, error: personnelError } = await personnelQuery.order('full_name');
+            let personnelQuery = supabase.from('personnel').select('id, "ADI SOYADI", "TC. KİMLİK NUMARASI", "KIDEM TARİHİ", regions(id, name)');
+            if (profile.role === 'coordinator' && profile.region_id) personnelQuery = personnelQuery.eq('"ŞUBE"', profile.region_id);
+            if (regionId) personnelQuery = personnelQuery.eq('"ŞUBE"', Number(regionId));
+            if (search) personnelQuery = personnelQuery.ilike('"ADI SOYADI"', `%${search}%`);
+        
+            const { data: personnelData, error: personnelError } = await personnelQuery.order('"ADI SOYADI"');
             if (personnelError) throw personnelError;
 
             if (!personnelData || personnelData.length === 0) {
-                setTimesheetData([]);
-                setHolidays(new Set());
+                setInitialData([]);
+                setEditedData([]);
                 setLoading(false);
                 return;
             }
 
             const personnelIds = personnelData.map(p => p.id);
-            const startDate = new Date(date.getFullYear(), 0, 1);
-            const endDate = new Date(date.getFullYear(), 11, 31);
-            const [leavesRes, holidaysRes] = await Promise.all([
-                supabase.from('leave_requests').select('personnel_id, start_date, end_date, leave_type').in('personnel_id', personnelIds).eq('status', 'approved'),
-                supabase.from('official_holidays').select('date').gte('date', startDate.toISOString()).lte('date', endDate.toISOString())
-            ]);
-            if (leavesRes.error) throw leavesRes.error;
-            if (holidaysRes.error) throw holidaysRes.error;
+            const currentRegion = regions.find(r => r.id.toString() === (regionId || profile.region_id?.toString()));
             
-            setHolidays(new Set(holidaysRes.data.map(h => h.date)));
-            const combinedData = personnelData.map(person => {
-                const regionObject = Array.isArray(person.regions) ? person.regions[0] : person.regions;
+            const [leavesRes, holidaysRes, overtimeRes, extrasRes] = await Promise.all([
+                supabase.from('leave_requests').select('*').in('personnel_id', personnelIds).eq('status', 'approved'),
+                supabase.from('official_holidays').select('date').gte('date', monthStartDate).lte('date', monthEndDate),
+                currentRegion ? getOvertimeReport(currentRegion.name, monthStartDate, monthEndDate) : Promise.resolve({ success: false, data: [] }),
+                supabase.from('timesheet_extras').select('*').in('personnel_id', personnelIds).eq('year', year).eq('month', month + 1)
+            ]);
+
+            if (leavesRes.error || holidaysRes.error || extrasRes.error) throw new Error("Veri çekme hatası");
+
+            const localHolidays = new Set(holidaysRes.data.map(h => h.date));
+            
+            const overtimeMap = new Map<string, number>();
+            if (overtimeRes.success && overtimeRes.data) {
+                overtimeRes.data.forEach(rec => {
+                    const currentTotal = overtimeMap.get(rec.userName) || 0;
+                    overtimeMap.set(rec.userName, currentTotal + rec.totalOvertimeSeconds);
+                });
+            }
+
+            const extrasMap = new Map(extrasRes.data.map(e => [e.personnel_id, e]));
+
+            const getDayStatus = (day: number, leaves: ApprovedLeave[]): LeaveStatus => {
+                const dateForDay = new Date(Date.UTC(year, month, day));
+                const isoDate = dateForDay.toISOString().split('T')[0];
+                const dayOfWeek = dateForDay.getUTCDay();
+
+                if (weekendConfiguration === 'saturday_sunday' && (dayOfWeek === 0 || dayOfWeek === 6)) return 'hafta sonu';
+                if (weekendConfiguration === 'sunday_only' && dayOfWeek === 0) return 'hafta sonu';
+                if (localHolidays.has(isoDate)) return 'resmi tatil';
+
+                for (const leave of leaves) {
+                    if (isoDate >= leave.start_date && isoDate <= leave.end_date) {
+                        const cleanLeaveType = leave.leave_type?.trim().toLowerCase() as LeaveStatus;
+                        return statusStyles[cleanLeaveType] ? cleanLeaveType : 'çalıştı';
+                    }
+                }
+                return 'çalıştı';
+            };
+            
+            const finalData = personnelData.map((person: PersonnelData) => {
+                const personLeaves = (leavesRes.data as ApprovedLeave[]).filter(l => l.personnel_id === person.id);
+                const daily_statuses: { [day: number]: LeaveStatus } = {};
+                monthDays.forEach(day => {
+                    daily_statuses[day] = getDayStatus(day, personLeaves);
+                });
+                
+                // DÜZELTME: Sayım için ayrı bir nesne kullanıldı, böylece string ve number tipleri karışmadı.
+                const summaryCounts: { [key: string]: number } = {};
+                let fiili_gun = 0;
+                Object.values(daily_statuses).forEach(status => {
+                    summaryCounts[status] = (summaryCounts[status] || 0) + 1;
+                    if (statusStyles[status].count_as_work_day === 1) {
+                        fiili_gun += 1;
+                    }
+                });
+                
+                const toplam_gun = fiili_gun + (summaryCounts['hafta sonu'] || 0) + (summaryCounts['resmi tatil'] || 0);
+                const personExtras = extrasMap.get(person.id);
 
                 return {
-                    ...person,
                     personnel_id: person.id,
-                    regions: regionObject || null,
-                    approved_leaves: leavesRes.data.filter(l => l.personnel_id === person.id),
+                    full_name: person["ADI SOYADI"],
+                    tc_kimlik_no: person["TC. KİMLİK NUMARASI"],
+                    ise_giris_tarihi: person["KIDEM TARİHİ"],
+                    daily_statuses,
+                    summary: {
+                        "FİİLİ GÜN": fiili_gun,
+                        "HAFTA TATİLİ": summaryCounts['hafta sonu'] || 0,
+                        "RESMİ TATİL": summaryCounts['resmi tatil'] || 0,
+                        "ÜCRETLİ İZİN": summaryCounts['ücretli izin'] || 0,
+                        "RAPOR": summaryCounts['raporlu'] || 0,
+                        "ÜCRETSİZ İZİN": summaryCounts['ücretsiz izin'] || 0,
+                        "TOPLAM GÜN": toplam_gun,
+                        "FAZLA MESAİ SAATİ": secondsToTimeString(overtimeMap.get(person["ADI SOYADI"]) || 0),
+                    },
+                    missing_days: personExtras?.missing_days ?? null,
+                    additional_pay: personExtras?.additional_pay ?? null,
+                    notes: personExtras?.notes ?? null,
                 };
             });
-            setTimesheetData(combinedData as unknown as TimesheetData[]);
-            setDailyStatusCache(new Map());
+            setInitialData(finalData as TimesheetData[]);
+            setEditedData(JSON.parse(JSON.stringify(finalData)));
         } catch (error) {
             toast.error("Puantaj verileri çekilemedi.");
             console.error("Puantaj Hatası:", error);
         } finally {
             setLoading(false);
         }
-    }, [supabase, profile]);
+    }, [supabase, profile, regions, weekendConfiguration, monthDays]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchTimesheet(currentDate, selectedRegion, searchQuery);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [currentDate, selectedRegion, searchQuery, fetchTimesheet]);
-    
-    const getDayStatus = useCallback((person: TimesheetData, year: number, month: number, day: number): LeaveStatus => {
-        const cacheKey = `${person.personnel_id}-${year}-${month}-${day}`;
-        if (dailyStatusCache.has(cacheKey)) {
-            return dailyStatusCache.get(cacheKey)!;
+        if (regions.length > 0 || profile?.role === 'coordinator') {
+            const timer = setTimeout(() => {
+                fetchTimesheet(currentDate, selectedRegion, searchQuery);
+            }, 300);
+            return () => clearTimeout(timer);
         }
-        const dateForDay = new Date(Date.UTC(year, month, day));
-        const isoDate = dateForDay.toISOString().split('T')[0];
-        const dayOfWeek = dateForDay.getUTCDay();
+    }, [currentDate, selectedRegion, searchQuery, fetchTimesheet, regions, profile]);
 
-        if (weekendConfiguration === 'saturday_sunday' && (dayOfWeek === 0 || dayOfWeek === 6)) {
-            dailyStatusCache.set(cacheKey, 'hafta sonu'); return 'hafta sonu';
-        }
-        if (weekendConfiguration === 'sunday_only' && dayOfWeek === 0) {
-            dailyStatusCache.set(cacheKey, 'hafta sonu'); return 'hafta sonu';
-        }
-        if (holidays.has(isoDate)) {
-            dailyStatusCache.set(cacheKey, 'resmi tatil'); return 'resmi tatil';
-        }
-        for (const leave of person.approved_leaves) {
-            if (isoDate >= leave.start_date && isoDate <= leave.end_date) {
-                const cleanLeaveType = leave.leave_type?.trim().toLowerCase() as LeaveStatus;
-                if (statusStyles[cleanLeaveType]) {
-                    dailyStatusCache.set(cacheKey, cleanLeaveType);
-                    return cleanLeaveType;
-                }
+    const handleManualDataChange = (personnelId: number, field: 'missing_days' | 'additional_pay' | 'notes', value: string | number | null) => {
+        setEditedData(prev => prev.map(p => {
+            if (p.personnel_id === personnelId) {
+                return { ...p, [field]: value };
             }
+            return p;
+        }));
+    };
+
+    const handleSaveChanges = async () => {
+        setIsSaving(true);
+        const changesToSave: {
+            personnel_id: number;
+            year: number;
+            month: number;
+            missing_days: number | null;
+            additional_pay: number | null;
+            notes: string | null;
+        }[] = editedData
+            .filter((p: TimesheetData, index: number) => 
+                p.missing_days !== initialData[index].missing_days ||
+                p.additional_pay !== initialData[index].additional_pay ||
+                p.notes !== initialData[index].notes
+            )
+            .map((p: TimesheetData) => ({
+                personnel_id: p.personnel_id,
+                year: year,
+                month: month,
+                missing_days: p.missing_days,
+                additional_pay: p.additional_pay,
+                notes: p.notes,
+            }));
+
+        if (changesToSave.length === 0) {
+            toast.success("Kaydedilecek bir değişiklik yok.");
+            setIsSaving(false);
+            return;
         }
-        dailyStatusCache.set(cacheKey, 'çalıştı');
-        return 'çalıştı';
-    }, [dailyStatusCache, holidays, weekendConfiguration]);
 
-    const calculateSummary = useCallback((person: TimesheetData): SummaryCounts => {
-        const counts: SummaryCounts = {};
-        const year = currentDate.getFullYear();
-        
-        const processDay = (month: number, day: number) => {
-            const status = getDayStatus(person, year, month, day);
-            counts[status] = (counts[status] || 0) + 1;
-        };
-
-        if (showWholeYear) {
-            months.forEach(month => {
-                const daysInMonth = getDaysInMonth(year, month);
-                for (let day = 1; day <= daysInMonth; day++) processDay(month, day);
-            });
+        const result = await saveTimesheetExtras(changesToSave);
+        if (result.success) {
+            toast.success(result.message);
+            fetchTimesheet(currentDate, selectedRegion, searchQuery);
         } else {
-            const month = currentDate.getMonth();
-            const daysInMonth = getDaysInMonth(year, month);
-            for (let day = 1; day <= daysInMonth; day++) processDay(month, day);
+            toast.error(result.message);
         }
-        return counts;
-    }, [currentDate, getDayStatus, showWholeYear, months]);
-    
-    const handleExport = async () => {
-        setIsExporting(true);
-        const toastId = toast.loading("Renkli Excel raporu oluşturuluyor...");
+        setIsSaving(false);
+    };
 
+    const handleExportToExcel = async () => {
+        if (editedData.length === 0) {
+            toast.error("Aktarılacak veri bulunmuyor.");
+            return;
+        }
+        setIsExporting(true);
+        const toastId = toast.loading("Excel raporu oluşturuluyor...");
         try {
             const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Puantaj Raporu');
+            const worksheet = workbook.addWorksheet('Puantaj Cetveli');
 
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            const headerStyle: Partial<ExcelJS.Style> = {
-                font: { bold: true, color: { argb: 'FFFFFFFF' } },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A5568' } },
-                alignment: { horizontal: 'center', vertical: 'middle' },
-            };
+            worksheet.mergeCells('A1:AR1');
+            const titleCell = worksheet.getCell('A1');
+            titleCell.value = 'Şirket: Ay-ka Doğalgaz Enerji';
+            titleCell.font = { bold: true, size: 14 };
+            titleCell.alignment = { horizontal: 'center' };
 
-            const cellStyle = (status: LeaveStatus): Partial<ExcelJS.Style> => {
-                const colors: { [key: string]: { textColor: string, bgColor: string } } = {
-                    'çalıştı': { textColor: 'FF68D391', bgColor: 'FF2F5242' },
-                    'yıllık izin': { textColor: 'FF63B3ED', bgColor: 'FF2C5282' },
-                    'ücretli izin': { textColor: 'FF4FD1C5', bgColor: 'FF285E61' },
-                    'ücretsiz izin': { textColor: 'FFA0AEC0', bgColor: 'FF4A5568' },
-                    'raporlu': { textColor: 'FFF6AD55', bgColor: 'FF744210' },
-                    'resmi tatil': { textColor: 'FF9F7AEA', bgColor: 'FF553C9A' },
-                    'hafta sonu': { textColor: 'FF718096', bgColor: 'FF2D3748' },
-                };
-                const color = colors[status] || { textColor: 'FFFFFFFF', bgColor: 'FF000000' };
-                return {
-                    font: { color: { argb: color.textColor } },
-                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: color.bgColor } },
-                    alignment: { horizontal: 'center', vertical: 'middle' },
-                }
-            };
-            
-            const headers: Partial<ExcelJS.Column>[] = [
-                { header: 'Personel Adı', key: 'name', width: 30 },
-                { header: 'T.C. Kimlik No', key: 'tc', width: 15 },
-                { header: 'Bölge', key: 'region', width: 20 },
+            worksheet.mergeCells('A2:AR2');
+            const subtitleCell = worksheet.getCell('A2');
+            const monthName = currentDate.toLocaleDateString('tr-TR', { month: 'long' }).toUpperCase();
+            subtitleCell.value = `${monthName} ${year} DÖNEMİ PUANTAJ LİSTESİ`;
+            subtitleCell.font = { bold: true, size: 12 };
+            subtitleCell.alignment = { horizontal: 'center' };
+            worksheet.addRow([]);
+
+            const baseHeaders = ['SIRA NO', 'PER. T.C. NO', 'ADI SOYADI', 'İŞE GİRİŞ TARİHİ'];
+            const summaryHeadersExcel = [
+                'İŞTEN AYRILIŞ TARİHİ', 'GÜNLÜK MESAİ SAATİ', 'TOPLAM MESAİ SÜRESİ', 'HAFTA TATİLİ', 'RESMİ TATİL', 
+                'YOL YARDIMI', 'FAZLA MESAİ GEÇEN AY', 'FAZLA MESAİ BU AY', 'TOPLAM FAZLA MESAİ', 'İKRAMİYE', 'AVANS', 'NET ELE GEÇECEK'
             ];
-            const daysInPeriod = showWholeYear 
-                ? months.flatMap(m => Array.from({ length: getDaysInMonth(year, m) }, (_, d) => ({ month: m, day: d + 1 })))
-                : Array.from({ length: getDaysInMonth(year, month) }, (_, d) => ({ month: month, day: d + 1 }));
-            daysInPeriod.forEach(d => {
-                const headerText = showWholeYear ? `${d.day}.${d.month + 1}` : `${d.day}`;
-                headers.push({ header: headerText, key: `day_${d.month}_${d.day}`, width: 5 });
+            const dayHeaders = monthDays.map(day => {
+                const date = new Date(year, month, day);
+                const dayName = date.toLocaleDateString('tr-TR', { weekday: 'short' });
+                return `${day}\n${dayName}`;
             });
-            const summaryHeaders = Object.values(statusStyles).map(s => ({
-                header: s.fullName, key: s.fullName, width: 15
-            }));
-            headers.push(...summaryHeaders);
-            worksheet.columns = headers;
+            const headerRow = worksheet.addRow([...baseHeaders, ...summaryHeadersExcel, ...dayHeaders]);
+            headerRow.font = { bold: true };
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            
+            editedData.forEach((person, index) => {
+                const dayStatuses = monthDays.map(day => person.daily_statuses[day] ? statusStyles[person.daily_statuses[day]].abbr : '');
+                const rowData = [
+                    index + 1,
+                    person.tc_kimlik_no,
+                    person.full_name,
+                    person.ise_giris_tarihi ? new Date(person.ise_giris_tarihi) : '',
+                    ...Array(summaryHeadersExcel.length).fill(''),
+                    ...dayStatuses
+                ];
+                worksheet.addRow(rowData);
+            });
 
-            for (const person of timesheetData) {
-                const summary = calculateSummary(person);
-                const rowData: Record<string, string | number> = {
-                    name: person.full_name,
-                    tc: person.tc_kimlik_no,
-                    region: person.regions?.name || 'N/A',
-                };
-                daysInPeriod.forEach(d => {
-                    rowData[`day_${d.month}_${d.day}`] = statusStyles[getDayStatus(person, year, d.month, d.day)].abbr;
-                });
-                summaryHeaders.forEach(h => {
-                    const statusKey = Object.keys(statusStyles).find(key => statusStyles[key as LeaveStatus].fullName === h.header) as LeaveStatus;
-                    rowData[h.key] = summary[statusKey] || 0;
-                });
-                const row = worksheet.addRow(rowData);
+            worksheet.addRow([]);
+            worksheet.mergeCells(`A${worksheet.rowCount}:B${worksheet.rowCount}`);
+            worksheet.getCell(`A${worksheet.rowCount}`).value = "AÇIKLAMA";
+            worksheet.getCell(`A${worksheet.rowCount}`).font = { bold: true };
 
-                daysInPeriod.forEach(d => {
-                    const cell = row.getCell(`day_${d.month}_${d.day}`);
-                    const status = getDayStatus(person, year, d.month, d.day);
-                    cell.style = cellStyle(status);
-                });
+            Object.values(statusStyles).forEach(style => {
+                const legendRow = worksheet.addRow([style.abbr, style.fullName]);
+                worksheet.mergeCells(`B${legendRow.number}:C${legendRow.number}`);
+            });
+            
+            worksheet.getColumn(1).width = 5;
+            worksheet.getColumn(2).width = 15;
+            worksheet.getColumn(3).width = 25;
+            worksheet.getColumn(4).width = 15;
+            worksheet.getColumn(4).numFmt = 'dd.mm.yyyy';
+
+            for (let i = 0; i < daysInMonth; i++) {
+                worksheet.getColumn(baseHeaders.length + summaryHeadersExcel.length + 1 + i).width = 5;
+                worksheet.getColumn(baseHeaders.length + summaryHeadersExcel.length + 1 + i).alignment = { horizontal: 'center' };
             }
 
-            worksheet.getRow(1).eachCell(cell => {
-                cell.style = headerStyle;
-            });
-            
             const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            saveAs(blob, `Puantaj_Raporu_${currentDate.toLocaleDateString('tr-TR', {month: 'long', year: 'numeric'})}.xlsx`);
+            saveAs(new Blob([buffer]), `Puantaj_${monthName}_${year}.xlsx`);
             toast.success("Rapor başarıyla oluşturuldu!", { id: toastId });
 
         } catch (error) {
@@ -283,176 +344,140 @@ export default function TimesheetPage() {
             setIsExporting(false);
         }
     };
+    
+    const summaryHeadersUI = ["FİİLİ GÜN", "HAFTA TATİLİ", "RESMİ TATİL", "ÜCRETLİ İZİN", "RAPOR", "ÜCRETSİZ İZİN", "TOPLAM GÜN", "EKSİK GÜN", "FAZLA MESAİ SAATİ", "İLAVE ÜCRET", "AÇIKLAMA"];
+    const isDirty = JSON.stringify(initialData) !== JSON.stringify(editedData);
+    
+    const visibleStatuses = useMemo(() => {
+        const statuses = new Set<LeaveStatus>();
+        editedData.forEach(person => {
+            Object.values(person.daily_statuses).forEach(status => {
+                statuses.add(status);
+            });
+        });
+        return Array.from(statuses).map(statusKey => ({
+            key: statusKey,
+            ...statusStyles[statusKey]
+        })).sort((a,b) => a.fullName.localeCompare(b.fullName));
+    }, [editedData]);
+
     return (
-        <div className="p-4 md:p-8 text-white h-full flex flex-col">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h1 className="text-3xl font-bold">Puantaj Cetveli</h1>
-                <div className="flex items-center gap-4">
-                    <button onClick={handleExport} disabled={isExporting || loading} className="flex items-center gap-2 bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <FileDown size={16} />
-                        <span>{isExporting ? 'Oluşturuluyor...' : 'Excel\'e Aktar'}</span>
-                    </button>
-             
-                    <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg">
-                        <select value={currentDate.getFullYear()} onChange={(e) => handleYearChange(Number(e.target.value))} className="bg-transparent text-xl font-semibold border-none focus:ring-0">
-                            {years.map(year => (<option key={year} value={year}>{year}</option>))}
-                        </select>
-                        {!showWholeYear && (
+        <>
+            {isLegendOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsLegendOpen(false)}>
+                    {/* DÜZELTME: onClick prop'u GlassCard'dan alınıp sarmalayıcı bir div'e verildi ve event tipi eklendi */}
+                    <div onClick={(e: MouseEvent) => e.stopPropagation()}>
+                        <GlassCard className="w-full max-w-md">
+                            <h3 className="text-xl font-bold mb-4">Lejant (Açıklamalar)</h3>
+                            <div className="space-y-2">
+                                {visibleStatuses.map(status => (
+                                    <div key={status.key} className="flex items-center gap-4 text-sm">
+                                        <span className="font-bold text-center w-8">{status.abbr}</span>
+                                        <span>-</span>
+                                        <span>{status.fullName}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </GlassCard>
+                    </div>
+                </div>
+            )}
+
+            <div className="p-4 md:p-8 text-white h-full flex flex-col">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                    <h1 className="text-3xl font-bold">Puantaj Cetveli</h1>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsLegendOpen(true)} className="flex items-center gap-2 bg-gray-600/50 px-3 py-2 rounded-lg hover:bg-gray-500/50 transition-colors" title="Lejantı Görüntüle">
+                           <HelpCircle size={16} /> <span className="hidden sm:inline">Lejant</span>
+                        </button>
+                        <button onClick={handleExportToExcel} disabled={isExporting || loading || editedData.length === 0} className="flex items-center gap-2 bg-green-600 px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
+                            <FileDown size={16} />
+                            <span>{isExporting ? 'Aktarılıyor...' : "Excel'e Aktar"}</span>
+                        </button>
+                        {isDirty && (
+                             <button onClick={handleSaveChanges} disabled={isSaving} className="flex items-center gap-2 bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                <Save size={16} />
+                                <span>{isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}</span>
+                            </button>
+                        )}
+                        <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg">
+                            <select value={year} onChange={(e) => setCurrentDate(new Date(Number(e.target.value), month, 1))} className="bg-transparent text-xl font-semibold border-none focus:ring-0">
+                                {years.map(y => (<option key={y} value={y}>{y}</option>))}
+                            </select>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setCurrentDate(prev => new Date(prev.setMonth(prev.getMonth() - 1)))} className="p-2 rounded-md hover:bg-white/10"><ChevronLeft /></button>
                                 <span className="text-xl font-semibold w-36 text-center">{currentDate.toLocaleDateString('tr-TR', { month: 'long' })}</span>
                                 <button onClick={() => setCurrentDate(prev => new Date(prev.setMonth(prev.getMonth() + 1)))} className="p-2 rounded-md hover:bg-white/10"><ChevronRight /></button>
                             </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}} className="mb-6 !p-4">
-                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-lg font-semibold"><Filter size={20} /><h3>Filtreler</h3></div>
-                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-                        <div className="relative w-full sm:w-auto">
-                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Personel ara..." className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10" />
                         </div>
-                        <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10">
-                            <option value="">Tüm Bölgeler</option>
-                            {regions.map(region => (<option key={region.id} value={region.id}>{region.name}</option>))}
-                        </select>
-                        {(selectedRegion || searchQuery) && (<button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white"><X size={16}/> Temizle</button>)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <input type="checkbox" id="showYear" checked={showWholeYear} onChange={(e) => setShowWholeYear(e.target.checked)} className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"/>
-                        <label htmlFor="showYear" className="text-sm font-medium">Tüm Yılı Göster</label>
                     </div>
                 </div>
-            </GlassCard>
-            
-            <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex-1 overflow-y-auto">
-                    <div className="overflow-x-auto bg-gray-900/50 backdrop-blur-md border border-white/10 rounded-xl">
+
+                <GlassCard className="mb-6 !p-4">
+                     <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 text-lg font-semibold"><Filter size={20} /><h3>Filtreler</h3></div>
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                            <div className="relative w-full sm:w-auto">
+                                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Personel ara..." className="w-full sm:w-64 bg-black/20 py-2 pl-10 pr-4 rounded-lg border border-white/10" />
+                            </div>
+                            <select value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)} className="w-full sm:w-auto bg-black/20 py-2 px-4 rounded-lg border border-white/10">
+                                <option value="">Tüm Bölgeler</option>
+                                {regions.map(region => (<option key={region.id} value={region.id}>{region.name}</option>))}
+                            </select>
+                            {(selectedRegion || searchQuery) && (<button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white"><X size={16}/> Temizle</button>)}
+                        </div>
+                    </div>
+                </GlassCard>
+                
+                <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-1 overflow-auto">
                         {loading ? <div className="text-center p-10">Yükleniyor...</div> : (
-                            <table className="w-full border-collapse">
-                                {showWholeYear ? (
-                                    <>
-                                        <thead className="sticky top-0 bg-gray-800 z-10">
-                                            <tr>
-                                                <th rowSpan={2} className="sticky left-0 bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[200px]">Personel</th>
-                                                {months.map(month => (
-                                                    <th key={month} colSpan={getDaysInMonth(currentDate.getFullYear(), month)} className="p-2 border-r border-b border-gray-700 text-center">
-                                                        {new Date(currentDate.getFullYear(), month).toLocaleDateString('tr-TR', { month: 'short' })}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                            <tr>
-                                                {months.flatMap(month =>
-                                                    Array.from({ length: getDaysInMonth(currentDate.getFullYear(), month) }, (_, i) => i + 1).map(day => (
-                                                        <th key={`${month}-${day}`} className="p-2 border-r border-b border-gray-700 text-center min-w-[40px] text-xs">{day}</th>
-                                                    ))
-                                                )}
-                                            </tr>
-                                        </thead>
-                              
-                                        <tbody>
-                                            {timesheetData.map(person => {
-                                                const year = currentDate.getFullYear();
-                                                const isExpanded = expandedPersonnelId === person.personnel_id;
-                                                const summary = isExpanded ? calculateSummary(person) : null;
-                                                return (
-                                                <Fragment key={person.personnel_id}>
-                                                    <tr className="hover:bg-white/5">
-                                                        <td className="sticky left-0 bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold whitespace-nowrap">
-                                                            <button onClick={() => setExpandedPersonnelId(isExpanded ? null : person.personnel_id)} className="w-full text-left hover:text-white text-gray-200 transition-colors">
-                                                                {person.full_name}
-                                                            </button>
+                            <table className="w-full border-collapse text-xs">
+                                <thead className="sticky top-0 bg-gray-800 z-10">
+                                     <tr>
+                                        <th className="sticky left-0 bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[50px]">SIRA NO</th>
+                                        <th className="sticky left-[50px] bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[200px]">ADI SOYADI</th>
+                                        {monthDays.map(day => (<th key={day} className="p-2 border-r border-b border-gray-700 text-center min-w-[40px]">{day}</th>))}
+                                        {summaryHeadersUI.map(header => (
+                                            <th key={header} className="p-2 border-r border-b border-gray-700 text-center min-w-[100px] bg-gray-700/50 whitespace-nowrap">{header}</th>
+                                        ))}
+                                     </tr>
+                                </thead>
+                                <tbody>
+                                     {editedData.map((person, index) => (
+                                        <tr key={person.personnel_id} className="hover:bg-white/5">
+                                            <td className="sticky left-0 bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold text-center">{index + 1}</td>
+                                            <td className="sticky left-[50px] bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold whitespace-nowrap">{person.full_name}</td>
+                                            {monthDays.map(day => {
+                                                const status = person.daily_statuses[day];
+                                                const style = statusStyles[status] || { abbr: '?' };
+                                                return <td key={day} title={statusStyles[status]?.fullName} className={`p-2 border-r border-b border-gray-700 text-center font-bold`}>{style.abbr}</td>;
+                                            })}
+                                            {summaryHeadersUI.map(header => {
+                                                if (header === "EKSİK GÜN" || header === "İLAVE ÜCRET" || header === "AÇIKLAMA") {
+                                                    const fieldName = { "EKSİK GÜN": "missing_days", "İLAVE ÜCRET": "additional_pay", "AÇIKLAMA": "notes"}[header] as 'missing_days' | 'additional_pay' | 'notes';
+                                                    return (
+                                                        <td key={header} className="p-0 border-r border-b border-gray-700 text-center bg-gray-900">
+                                                            <input 
+                                                                type={fieldName === 'notes' ? 'text' : 'number'}
+                                                                value={person[fieldName] ?? ''}
+                                                                onChange={(e) => handleManualDataChange(person.personnel_id, fieldName, e.target.value === '' ? null : (fieldName === 'notes' ? e.target.value : parseFloat(e.target.value)))}
+                                                                className="w-full h-full bg-transparent p-2 text-center text-white outline-none focus:bg-sky-900/50"
+                                                            />
                                                         </td>
-                                                        {months.flatMap(month =>
-                                                            Array.from({ length: getDaysInMonth(year, month) }, (_, i) => i + 1).map(day => {
-                                                                const finalStatus = getDayStatus(person, year, month, day);
-                                                                const style = statusStyles[finalStatus] || { fullName: 'Hata', abbr: '?', className: 'bg-red-500' };
-                                                                return (
-                                                                    <td key={`${month}-${day}`} title={style.fullName} className={`p-2 border-r border-b border-gray-700 text-center text-xs font-bold ${style.className}`}>{style.abbr}</td>
-                                                                );
-                                                            })
-                                                        )}
-                                                    </tr>
-                                                    {isExpanded && (
-                                                        <tr className="bg-black/20">
-                                                            <td colSpan={367} className="p-4">
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                                                    <div><p className="text-xs text-gray-400">T.C. Kimlik No</p><p className="font-semibold">{person.tc_kimlik_no}</p></div>
-                                                                    <div><p className="text-xs text-gray-400">Bölge</p><p className="font-semibold">{person.regions?.name || 'N/A'}</p></div>
-                                                                    {Object.entries(summary || {}).map(([key, value]) => (
-                                                                        <div key={key}>
-                                                                            <p className="text-xs text-gray-400">{statusStyles[key as LeaveStatus].fullName}</p>
-                                                                            <p className="font-semibold">{value} gün</p>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </Fragment>
-                                            )})}
-                                        </tbody>
-                                    </>
-                                ) : (
-                                    <>
-                                        <thead className="sticky top-0 bg-gray-800 z-10">
-                                            <tr>
-                                                <th className="sticky left-0 bg-gray-800 p-2 border-r border-b border-gray-700 min-w-[200px]">Personel</th>
-                                                {monthDays.map(day => (<th key={day} className="p-2 border-r border-b border-gray-700 text-center min-w-[50px]">{day}</th>))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {timesheetData.map((person) => {
-                                                const year = currentDate.getFullYear();
-                                                const month = currentDate.getMonth();
-                                                const isExpanded = expandedPersonnelId === person.personnel_id;
-                                                const summary = isExpanded ? calculateSummary(person) : null;
-                                                return (
-                                                <Fragment key={person.personnel_id}>
-                                                    <tr className="hover:bg-white/5">
-                                                        <td className="sticky left-0 bg-gray-800/80 backdrop-blur-sm p-2 border-r border-b border-gray-700 font-semibold whitespace-nowrap">
-                                                            <button onClick={() => setExpandedPersonnelId(isExpanded ? null : person.personnel_id)} className="w-full text-left hover:text-white text-gray-200 transition-colors">
-                                                                {person.full_name}
-                                                            </button>
-                                                        </td>
-                                                        {monthDays.map((day) => {
-                                                            const finalStatus = getDayStatus(person, year, month, day);
-                                                            const style = statusStyles[finalStatus] || { fullName: 'Hata', abbr: '?', className: 'bg-red-500' };
-                                                            return (
-                                                                <td key={day} title={style.fullName} className={`p-2 border-r border-b border-gray-700 text-center text-xs font-bold ${style.className}`}>{style.abbr}</td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                    {isExpanded && (
-                                                        <tr className="bg-black/20">
-                                                            <td colSpan={monthDays.length + 1} className="p-4">
-                                                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                                                    <div><p className="text-xs text-gray-400">T.C. Kimlik No</p><p className="font-semibold">{person.tc_kimlik_no}</p></div>
-                                                                    <div><p className="text-xs text-gray-400">Bölge</p><p className="font-semibold">{person.regions?.name || 'N/A'}</p></div>
-                                                                    {Object.entries(summary || {}).map(([key, value]) => (
-                                                                        <div key={key}>
-                                                                            <p className="text-xs text-gray-400">{statusStyles[key as LeaveStatus].fullName}</p>
-                                                                            <p className="font-semibold">{value} gün</p>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </Fragment>
-                                            )})}
-                                        </tbody>
-                                    </>
-                                )}
+                                                    );
+                                                }
+                                                return <td key={header} className="p-2 border-r border-b border-gray-700 text-center font-semibold">{person.summary[header]}</td>;
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
                             </table>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }

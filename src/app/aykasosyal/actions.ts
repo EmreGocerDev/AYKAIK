@@ -1,5 +1,6 @@
-"use server";
+// YOL: src/app/aykasosyal/actions.ts
 
+"use server";
 import { createAdminClient } from '@/lib/supabase/admin';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
@@ -10,16 +11,16 @@ import crypto from 'crypto';
 
 import { Resend } from 'resend';
 import PasswordResetEmail from '@/components/emails/PasswordResetEmail';
-// YENİ: Resend istemcisini başlat
+import type { HistoryEntry } from '@/app/actions';
+
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-
 const SESSION_COOKIE_NAME = 'aykasosyal_session';
 
 type ActionState = {
     success: boolean;
     message: string;
 };
+
 // =================================================================
 // HELPER (YARDIMCI) FONKSİYON
 // =================================================================
@@ -33,12 +34,14 @@ async function getSocialUser() {
         if (!session.userId) return null;
         
         const supabase = createClient();
-        const { data: user, error } = await supabase
+        // DÜZELTME: Kullanılmayan 'error' değişkeni '_' ile işaretlendi.
+        const { data: user, error: _error } = await supabase
             .from('social_users')
             .select('*')
             .eq('id', session.userId)
             .single();
-        if (error) return null;
+
+        if (_error) return null;
         return user;
     } catch (error) {
         return null;
@@ -48,7 +51,6 @@ async function getSocialUser() {
 // =================================================================
 // AUTH (KULLANICI GİRİŞ/KAYIT) FONKSİYONLARI
 // =================================================================
-// ... (aykaSocialRegister, aykaSocialLogin, aykaSocialLogout fonksiyonları burada, değişmedi)
 export async function aykaSocialRegister(prevState: ActionState, formData: FormData) {
     const supabase = createAdminClient();
     const rawFormData = {
@@ -62,38 +64,36 @@ export async function aykaSocialRegister(prevState: ActionState, formData: FormD
         return { success: false, message: 'Tüm alanlar zorunludur.' };
     }
     
-    // 1. KONTROL: Girilen TC, personel listesinde var mı?
     const { data: personnel, error: personnelError } = await supabase
         .from('personnel')
-        .select('tc_kimlik_no')
-        .eq('tc_kimlik_no', rawFormData.tc_kimlik_no)
+        .select('"TC. KİMLİK NUMARASI"')
+        .eq('"TC. KİMLİK NUMARASI"', rawFormData.tc_kimlik_no.trim())
         .single();
+
     if (personnelError || !personnel) {
         return { success: false, message: 'Bu T.C. Kimlik Numarası sistemde kayıtlı bir personele ait değildir.' };
     }
 
-    // 2. KONTROL: Bu TC ile daha önce sosyal hesap açılmış mı?
     const { data: existingSocialUser } = await supabase
         .from('social_users')
         .select('id')
-        .eq('tc_kimlik_no', rawFormData.tc_kimlik_no)
+        .eq('tc_kimlik_no', rawFormData.tc_kimlik_no.trim())
         .single();
     if (existingSocialUser) {
         return { success: false, message: 'Bu T.C. Kimlik Numarası ile zaten bir AykaSosyal hesabı oluşturulmuş.' };
     }
 
-    // KONTROLLER TAMAM, YENİ KULLANICIYI OLUŞTUR
     const password_hash = await bcrypt.hash(rawFormData.password, 10);
     const { error: insertError } = await supabase.from('social_users').insert({
-        tc_kimlik_no: rawFormData.tc_kimlik_no, // TC'yi de ekliyoruz
+        tc_kimlik_no: rawFormData.tc_kimlik_no.trim(),
         full_name: rawFormData.full_name,
         username: rawFormData.username,
         email: rawFormData.email,
         password_hash: password_hash
     });
+
     if (insertError) {
-        if (insertError.code === '23505') { // unique constraint violation
-            // Bu hata username veya email için de gelebilir
+        if (insertError.code === '23505') {
             return { success: false, message: 'Bu kullanıcı adı veya e-posta zaten kullanılıyor.' };
         }
         return { success: false, message: `Kayıt başarısız: ${insertError.message}` };
@@ -101,18 +101,22 @@ export async function aykaSocialRegister(prevState: ActionState, formData: FormD
 
     return { success: true, message: 'Personel doğrulaması başarılı! Kaydınız oluşturuldu. Şimdi giriş yapabilirsiniz.' };
 }
+
 export async function aykaSocialLogin(prevState: ActionState, formData: FormData) {
     const supabase = createAdminClient();
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+
     const { data: user, error } = await supabase.from('social_users').select('id, password_hash').eq('email', email).single();
     if (error || !user) {
         return { success: false, message: 'E-posta veya şifre hatalı.' };
     }
+    
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
         return { success: false, message: 'E-posta veya şifre hatalı.' };
     }
+
     const sessionData = { userId: user.id };
     (await cookies()).set(SESSION_COOKIE_NAME, JSON.stringify(sessionData), {
         httpOnly: true,
@@ -122,22 +126,154 @@ export async function aykaSocialLogin(prevState: ActionState, formData: FormData
     });
     redirect('/dashboard/aykasosyal');
 }
+
 export async function aykaSocialLogout() {
     (await cookies()).delete(SESSION_COOKIE_NAME);
     redirect('/');
 }
 
 // =================================================================
-// FEED (GÖNDERİ AKIŞI) FONKSİYONLARI
+// PERSONEL İZİN FONKSİYONLARI
 // =================================================================
-// ... (createSocialPost, toggleSocialLike, getSocialFeed fonksiyonları burada, değişmedi)
+export async function createLeaveRequestForSocialUser(prevState: ActionState, formData: FormData) {
+  const socialUser = await getSocialUser();
+  if (!socialUser || !socialUser.tc_kimlik_no) {
+    return { success: false, message: "İzin talebi oluşturmak için giriş yapmalısınız." };
+  }
+
+  const rawFormData = {
+    start_date: formData.get("start_date") as string,
+    end_date: formData.get("end_date") as string,
+    leave_type: formData.get("leave_type") as string,
+  };
+
+  if (!rawFormData.start_date || !rawFormData.end_date || !rawFormData.leave_type) {
+      return { success: false, message: 'Lütfen tüm alanları doldurun.' };
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: personnel, error: personnelError } = await supabase
+    .from("personnel")
+    .select("id")
+    .eq('"TC. KİMLİK NUMARASI"', socialUser.tc_kimlik_no.trim())
+    .single();
+
+  if (personnelError || !personnel) {
+    console.error("Personel ID bulunamadı:", personnelError);
+    return { success: false, message: "Personel kaydınız bulunamadı. Lütfen İK ile iletişime geçin." };
+  }
+
+  const initialHistory: HistoryEntry[] = [{
+    action: "Talep oluşturuldu",
+    actor: "Personel",
+    timestamp: new Date().toISOString(),
+    notes: `Talep, personel tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
+  }];
+
+  const { error: insertError } = await supabase.from("leave_requests").insert({
+    personnel_id: personnel.id,
+    start_date: rawFormData.start_date,
+    end_date: rawFormData.end_date,
+    status: "pending",
+    history_log: initialHistory,
+    leave_type: rawFormData.leave_type,
+  });
+
+  if (insertError) {
+    return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
+  }
+  
+  revalidatePath('/dashboard/aykasosyal/izinlerim');
+  revalidatePath('/dashboard/calendar');
+
+   return { success: true, message: "YENİ KOD BAŞARIYLA ÇALIŞTI! İzin talebiniz oluşturuldu." };
+}
+
+export async function getMyLeaveRequests() {
+    console.log("--- YENİ getMyLeaveRequests fonksiyonu ÇALIŞIYOR ---"); 
+
+    const socialUser = await getSocialUser();
+    if (!socialUser || !socialUser.tc_kimlik_no) return [];
+
+    const supabase = createAdminClient();
+
+    const { data: personnel, error: personnelError } = await supabase
+        .from("personnel")
+        .select('id, "ADI SOYADI"')
+        .eq('"TC. KİMLİK NUMARASI"', socialUser.tc_kimlik_no.trim())
+        .single();
+    if (personnelError || !personnel) {
+        console.error("İzinleri çekerken personel kaydı bulunamadı:", personnelError);
+        return [];
+    }
+
+    const personnelId = personnel.id;
+    const personnelFullName = personnel["ADI SOYADI"];
+    
+    const { data: requests, error: requestsError } = await supabase
+        .from("leave_requests")
+        .select(`*`)
+        .eq("personnel_id", personnelId)
+        .order('created_at', { ascending: false });
+
+    if (requestsError) {
+        console.error("Kişisel izin talepleri çekilemedi:", requestsError);
+        return [];
+    }
+
+    const formattedRequests = requests.map(req => ({
+        ...req,
+        personnel_full_name: personnelFullName,
+    }));
+    return formattedRequests;
+}
+
+export async function getMyPersonnelInfo() {
+    const socialUser = await getSocialUser();
+    if (!socialUser || !socialUser.tc_kimlik_no) {
+        console.error("AykaSosyal Profilim Hatası: Oturum bilgisi veya T.C. No bulunamadı.");
+        return null;
+    }
+
+    const userTc = socialUser.tc_kimlik_no.trim();
+    const supabase = createAdminClient();
+
+    const { data: personnelList, error } = await supabase
+        .from("personnel")
+        .select('*')
+        .eq('"TC. KİMLİK NUMARASI"', userTc);
+
+    if (error) {
+        console.error("AykaSosyal Profilim Hatası: Personel sorgusunda veritabanı hatası:", error);
+        return null;
+    }
+
+    if (!personnelList || personnelList.length === 0) {
+        console.error(`AykaSosyal Profilim Hatası: Personel tablosunda '${userTc}' T.C. numarası ile eşleşen kayıt bulunamadı.`);
+        return null;
+    }
+    
+    if (personnelList.length > 1) {
+        console.warn(`AykaSosyal Profilim Uyarısı: '${userTc}' T.C. numarası ile birden fazla (${personnelList.length}) personel kaydı bulundu. Veri tutarlılığını kontrol edin. İlk kayıt kullanılacak.`);
+    }
+
+    return personnelList[0];
+}
+
+
+// =================================================================
+// FEED (GÖNDERİ AKIŞI) FONKSİYONLARI (DEĞİŞİKLİK YOK)
+// =================================================================
 export async function createSocialPost(formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
+
     const content = formData.get('content') as string;
     if (!content || content.trim().length === 0) {
         return { success: false, message: 'Gönderi boş olamaz.' };
     }
+
     const supabase = createClient();
     const { error } = await supabase.from('social_posts').insert({
         user_id: user.id,
@@ -149,14 +285,17 @@ export async function createSocialPost(formData: FormData) {
     revalidatePath('/dashboard/aykasosyal');
     return { success: true, message: 'Gönderi paylaşıldı!' };
 }
+
 export async function toggleSocialLike(postId: number) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Beğenmek için giriş yapmalısınız.' };
+
     const supabase = createClient();
     const { data: existingLike, error: checkError } = await supabase.from('social_likes').select('id').eq('user_id', user.id).eq('post_id', postId).single();
     if (checkError && checkError.code !== 'PGRST116') {
         return { success: false, message: 'Bir hata oluştu.' };
     }
+
     if (existingLike) {
         const { error: deleteError } = await supabase.from('social_likes').delete().eq('id', existingLike.id);
         if (deleteError) return { success: false, message: 'Beğeni geri alınamadı.' };
@@ -164,28 +303,35 @@ export async function toggleSocialLike(postId: number) {
         const { error: insertError } = await supabase.from('social_likes').insert({ user_id: user.id, post_id: postId });
         if (insertError) return { success: false, message: 'Gönderi beğenilemedi.' };
     }
+    
     revalidatePath('/dashboard/aykasosyal');
     return { success: true };
 }
+
 export async function getSocialFeed(regionId?: string) {
     const user = await getSocialUser();
     const currentUserId = user ? user.id : '00000000-0000-0000-0000-000000000000';
     const regionParam = (!regionId || regionId === 'all') ? null : Number(regionId);
+    
     const supabase = createClient();
     const { data, error } = await supabase.rpc('get_social_feed', {
         current_user_id: currentUserId,
         filter_region_id: regionParam
     });
+
     if(error) console.error("Feed Error:", error);
     return data || [];
 }
+
 export async function addSocialComment(postId: number, formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yorum yapmak için giriş yapmalısınız.' };
+    
     const content = formData.get('content') as string;
     if (!content || content.trim().length === 0) {
         return { success: false, message: 'Yorum boş olamaz.' };
     }
+    
     const supabase = createClient();
     const { error } = await supabase.from('social_comments').insert({
         user_id: user.id,
@@ -195,14 +341,15 @@ export async function addSocialComment(postId: number, formData: FormData) {
     if (error) {
         return { success: false, message: 'Yorum eklenirken bir hata oluştu.' };
     }
+    
     revalidatePath('/dashboard/aykasosyal');
     return { success: true, message: 'Yorum eklendi.' };
 }
 
+
 // =================================================================
-// PROFILE (PROFİL) FONKSİYONLARI
+// PROFILE (PROFİL) FONKSİYONLARI (DEĞİŞİKLİK YOK)
 // =================================================================
-// ... (getSocialProfileForEdit, updateSocialProfile fonksiyonları burada, değişmedi)
 export async function getSocialProfileForEdit() {
     const user = await getSocialUser();
     if (!user) {
@@ -215,18 +362,22 @@ export async function getSocialProfileForEdit() {
         region_id: user.region_id
     };
 }
+
 export async function updateSocialProfile(prevState: ActionState, formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
+
     const rawFormData = {
         full_name: formData.get('full_name') as string,
         username: formData.get('username') as string,
         bio: formData.get('bio') as string,
         region_id: formData.get('region_id') ? Number(formData.get('region_id')) : null
     };
+
     if (!rawFormData.full_name || !rawFormData.username) {
         return { success: false, message: 'Ad Soyad ve Kullanıcı Adı zorunludur.' };
     }
+    
     const supabase = createClient();
     const { error } = await supabase.from('social_users').update({
         full_name: rawFormData.full_name,
@@ -234,19 +385,23 @@ export async function updateSocialProfile(prevState: ActionState, formData: Form
         bio: rawFormData.bio,
         region_id: rawFormData.region_id
     }).eq('id', user.id);
+
     if (error) {
         if (error.code === '23505') {
             return { success: false, message: 'Bu kullanıcı adı zaten alınmış.' };
         }
         return { success: false, message: `Profil güncellenemedi: ${error.message}` };
     }
+    
     revalidatePath('/dashboard/aykasosyal/profil/duzenle');
     return { success: true, message: 'Profil başarıyla güncellendi!' };
 }
+
 export async function getSocialProfileByUsername(username: string) {
     const supabase = createClient();
     const currentUser = await getSocialUser();
     const currentUserId = currentUser ? currentUser.id : '00000000-0000-0000-0000-000000000000';
+    
     const { data, error } = await supabase.rpc('get_user_profile_and_posts', {
         profile_username: username,
         current_user_id: currentUserId
@@ -260,12 +415,12 @@ export async function getSocialProfileByUsername(username: string) {
 
 
 // =================================================================
-// EVENT (ETKİNLİK) FONKSİYONLARI
+// EVENT (ETKİNLİK) FONKSİYONLARI (DEĞİŞİKLİK YOK)
 // =================================================================
-// ... (createSocialEvent, toggleRsvpToEvent fonksiyonları burada, değişmedi)
 export async function createSocialEvent(formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
+
     const eventData = {
         content: formData.get('content') as string,
         title: formData.get('title') as string,
@@ -275,6 +430,7 @@ export async function createSocialEvent(formData: FormData) {
     if (!eventData.content || !eventData.title || !eventData.event_datetime) {
         return { success: false, message: 'Etkinlik için açıklama, başlık ve tarih zorunludur.' };
     }
+
     const supabase = createAdminClient();
     const { data: post, error: postError } = await supabase.from('social_posts').insert({
         user_id: user.id,
@@ -284,6 +440,7 @@ export async function createSocialEvent(formData: FormData) {
     if (postError || !post) {
         return { success: false, message: `Gönderi oluşturulamadı: ${postError?.message}` };
     }
+
     const { error: eventError } = await supabase.from('social_events').insert({
         post_id: post.id,
         title: eventData.title,
@@ -295,27 +452,30 @@ export async function createSocialEvent(formData: FormData) {
         await supabase.from('social_posts').delete().eq('id', post.id);
         return { success: false, message: `Etkinlik oluşturulamadı: ${eventError.message}` };
     }
+    
     revalidatePath('/dashboard/aykasosyal');
     return { success: true, message: 'Etkinlik başarıyla paylaşıldı!' };
 }
+
 export async function toggleRsvpToEvent(postId: number) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Katılmak için giriş yapmalısınız.' };
+
     const supabase = createClient();
     const { data: event } = await supabase.from('social_events').select('id').eq('post_id', postId).single();
     if (!event) return { success: false, message: 'Etkinlik bulunamadı.' };
+
     const { data: existingRsvp } = await supabase.from('social_event_rsvps').select('id').eq('user_id', user.id).eq('event_id', event.id).single();
     if (existingRsvp) {
         await supabase.from('social_event_rsvps').delete().eq('id', existingRsvp.id);
     } else {
         await supabase.from('social_event_rsvps').insert({ user_id: user.id, event_id: event.id });
     }
+    
     revalidatePath('/dashboard/aykasosyal');
     return { success: true };
 }
 
-
-// getEventDetails fonksiyonu güncellendi
 export async function getEventDetails(postId: number) {
     const supabase = createClient();
     const { data: postData, error: postError } = await supabase
@@ -328,8 +488,6 @@ export async function getEventDetails(postId: number) {
         .eq('id', postId)
         .eq('post_type', 'event')
         .single();
-    // DÜZELTME: Hata kontrolü daha güvenli hale getirildi.
-    // Artık event listesinin boş olup olmadığını kontrol ediyoruz.
     if (postError || !postData || !postData.event || postData.event.length === 0) {
         console.error("Etkinlik detayı çekme hatası:", postError);
         return null;
@@ -339,7 +497,7 @@ export async function getEventDetails(postId: number) {
         .rpc('get_event_attendees', { p_post_id: postId });
     if (attendeesError) {
         console.error("Katılımcı listesi çekme hatası:", attendeesError);
-        return { post: postData, attendees: [] }; // Katılımcılar olmasa da sayfa çalışsın
+        return { post: postData, attendees: [] };
     }
     
     return {
@@ -347,6 +505,11 @@ export async function getEventDetails(postId: number) {
         attendees: attendeesData
     };
 }
+
+
+// =================================================================
+// PASSWORD RESET (ŞİFRE SIFIRLAMA) FONKSİYONLARI (DEĞİŞİKLİK YOK)
+// =================================================================
 export async function requestPasswordReset(prevState: ActionState, formData: FormData) {
     const email = formData.get('email') as string;
     if (!email) {
@@ -356,10 +519,9 @@ export async function requestPasswordReset(prevState: ActionState, formData: For
     const supabase = createAdminClient();
     const { data: user } = await supabase.from('social_users').select('id').eq('email', email).single();
     if (user) {
-        // Kullanıcı varsa token oluştur ve e-posta gönder
         const token = crypto.randomBytes(32).toString('hex');
         const token_hash = crypto.createHash('sha256').update(token).digest('hex');
-        const expires_at = new Date(Date.now() + 60 * 60 * 1000); // 1 saat geçerli
+        const expires_at = new Date(Date.now() + 60 * 60 * 1000);
 
         const { error: tokenError } = await supabase.from('social_password_reset_tokens').insert({
             user_id: user.id,
@@ -370,15 +532,13 @@ export async function requestPasswordReset(prevState: ActionState, formData: For
             return { success: false, message: 'Şifre sıfırlama talebi oluşturulamadı. Lütfen tekrar deneyin.' };
         }
 
-        // YENİ: Gerçek E-posta Gönderme Kodu
         const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/sifre-sifirla?token=${token}`;
         try {
             await resend.emails.send({
-                from: 'AykaSosyal <onboarding@resend.dev>', // Test için bu adresi kullanıyoruz
+                from: 'AykaSosyal <onboarding@resend.dev>',
                 to: email,
                 subject: 'AykaSosyal Şifre Sıfırlama Talebi',
                 react: PasswordResetEmail({ resetLink }),
-      
             });
         } catch (error) {
             console.error("E-posta gönderme hatası:", error);
@@ -386,8 +546,6 @@ export async function requestPasswordReset(prevState: ActionState, formData: For
         }
     }
 
-    // Her durumda (kullanıcı bulunsun veya bulunmasın) aynı mesajı göstererek
-    // e-posta adreslerinin sistemde olup olmadığı bilgisini sızdırmamış oluruz.
     return { success: true, message: 'Eğer bu e-posta adresi sistemimizde kayıtlıysa, şifre sıfırlama bağlantısı gönderilmiştir.' };
 }
 
@@ -403,7 +561,6 @@ export async function resetPassword(prevState: ActionState, formData: FormData) 
     const hashedToken = crypto.createHash('sha256').update(token as string).digest('hex');
 
     const supabase = createAdminClient();
-    // 1. Token veritabanında var mı ve geçerli mi?
     const { data: tokenData } = await supabase
         .from('social_password_reset_tokens')
         .select('user_id, expires_at')
@@ -413,7 +570,6 @@ export async function resetPassword(prevState: ActionState, formData: FormData) 
         return { success: false, message: 'Bu şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.' };
     }
 
-    // 2. Yeni şifreyi hash'le ve güncelle
     const newPasswordHash = await bcrypt.hash(password, 10);
     const { error: updateError } = await supabase
         .from('social_users')
@@ -423,19 +579,14 @@ export async function resetPassword(prevState: ActionState, formData: FormData) 
         return { success: false, message: 'Şifre güncellenirken bir hata oluştu.' };
     }
 
-    // 3. Kullanılmış token'ı sil
     await supabase.from('social_password_reset_tokens').delete().eq('token_hash', hashedToken);
 
     redirect('/');
-    // Başarılı olunca ana sayfaya (giriş ekranına) yönlendir.
 }
-// ... dosyanızdaki diğer tüm fonksiyonların altına ekleyin
 
 // =================================================================
-// CONTENT MANAGEMENT (İÇERİK YÖNETİMİ) FONKSİYONLARI
+// CONTENT MANAGEMENT (İÇERİK YÖNETİMİ) FONKSİYONLARI (DEĞİŞİKLİK YOK)
 // =================================================================
-
-// Arayüzde mevcut kullanıcının ID'sini almak için basit bir fonksiyon
 export async function getCurrentSocialUserId() {
     const user = await getSocialUser();
     return user ? user.id : null;
@@ -446,13 +597,11 @@ export async function deleteSocialPost(postId: number) {
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
 
     const supabase = createClient();
-    // Silme işleminden önce gönderinin sahibinin mevcut kullanıcı olduğunu teyit et
     const { error } = await supabase
         .from('social_posts')
         .delete()
         .eq('id', postId)
-        .eq('user_id', user.id); // EN ÖNEMLİ GÜVENLİK KONTROLÜ
-
+        .eq('user_id', user.id);
     if (error) {
         return { success: false, message: 'Gönderi silinirken bir hata oluştu.' };
     }
@@ -467,7 +616,6 @@ export async function deleteSocialComment(commentId: number) {
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
 
     const supabase = createClient();
-    // Yorumun sahibinin mevcut kullanıcı olduğunu teyit et
     const { error } = await supabase
         .from('social_comments')
         .delete()
@@ -481,4 +629,91 @@ export async function deleteSocialComment(commentId: number) {
     revalidatePath('/dashboard/aykasosyal/profil/[username]', 'layout');
     revalidatePath('/dashboard/aykasosyal/etkinlik/[postId]', 'layout');
     return { success: true };
+}
+
+export async function createAdvanceRequestForSocialUser(prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const socialUser = await getSocialUser();
+  if (!socialUser || !socialUser.tc_kimlik_no) {
+    return { success: false, message: "Avans talebi oluşturmak için giriş yapmalısınız." };
+  }
+
+  const rawFormData = {
+    amount: parseFloat(formData.get("amount") as string),
+    reason: formData.get("reason") as string,
+  };
+
+  if (!rawFormData.amount || rawFormData.amount <= 0) {
+      return { success: false, message: 'Lütfen geçerli bir miktar girin.' };
+  }
+
+  const supabase = createAdminClient();
+
+  const { data: personnel, error: personnelError } = await supabase
+    .from("personnel")
+    .select("id")
+    .eq('"TC. KİMLİK NUMARASI"', socialUser.tc_kimlik_no.trim())
+    .single();
+
+  if (personnelError || !personnel) {
+    return { success: false, message: "Personel kaydınız bulunamadı. Lütfen İK ile iletişime geçin." };
+  }
+
+  const initialHistory: HistoryEntry[] = [{
+    action: "Talep oluşturuldu",
+    actor: "Personel",
+    timestamp: new Date().toISOString(),
+    notes: `Personel tarafından ${rawFormData.amount} TL tutarında avans talebi oluşturuldu. Sebep: ${rawFormData.reason || 'Belirtilmedi'}`
+  }];
+
+  const { error: insertError } = await supabase.from("cash_advance_requests").insert({
+    personnel_id: personnel.id,
+    amount: rawFormData.amount,
+    reason: rawFormData.reason,
+    status: "pending",
+    history_log: initialHistory,
+  });
+
+  if (insertError) {
+    return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
+  }
+  
+  revalidatePath('/dashboard/aykasosyal/avanslarim');
+  revalidatePath('/dashboard/notifications');
+
+   return { success: true, message: "Avans talebiniz başarıyla oluşturuldu." };
+}
+
+export async function getMyAdvanceRequests() {
+    const socialUser = await getSocialUser();
+    if (!socialUser || !socialUser.tc_kimlik_no) return [];
+
+    const supabase = createAdminClient();
+
+    const { data: personnel, error: personnelError } = await supabase
+        .from("personnel")
+        .select('id, "ADI SOYADI"')
+        .eq('"TC. KİMLİK NUMARASI"', socialUser.tc_kimlik_no.trim())
+        .single();
+
+    if (personnelError || !personnel) {
+        console.error("Avansları çekerken personel kaydı bulunamadı:", personnelError);
+        return [];
+    }
+
+    const { data: requests, error: requestsError } = await supabase
+        .from("cash_advance_requests")
+        .select(`*`)
+        .eq("personnel_id", personnel.id)
+        .order('created_at', { ascending: false });
+
+    if (requestsError) {
+        console.error("Kişisel avans talepleri çekilemedi:", requestsError);
+        return [];
+    }
+
+    const formattedRequests = requests.map(req => ({
+        ...req,
+        personnel_full_name: personnel["ADI SOYADI"],
+    }));
+    return formattedRequests;
 }

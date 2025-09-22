@@ -1,3 +1,5 @@
+// YOL: src/components/RequestDetailsModal.tsx [cite: 1846]
+
 "use client";
 
 import { useState, FormEvent, useEffect } from 'react';
@@ -6,13 +8,15 @@ import { coordinatorApprove, coordinatorReject, adminApprove, adminReject, updat
 import toast from 'react-hot-toast';
 import type { LeaveRequest } from '@/app/dashboard/requests/page';
 import { useSettings } from '@/contexts/SettingsContext';
-import { calculateWorkingDays } from '@/lib/utils';
+import { calculateWorkingDays, safeNewDate } from '@/lib/utils';
+
 // YENİ: Güvenli tarih formatlama fonksiyonu
 const safeLocaleDate = (dateString: string) => {
     if (!dateString) return '';
     // '2025-08-31' formatını '2025/08/31' formatına çevirerek hatayı önle
-    return new Date(dateString.replace(/-/g, '/')).toLocaleDateString('tr-TR');
+    return safeNewDate(dateString).toLocaleDateString('tr-TR');
 }
+
 type ModalProps = {
   request: LeaveRequest;
   onClose: () => void;
@@ -26,7 +30,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
   const [newStartDate, setNewStartDate] = useState(request.start_date);
   const [newEndDate, setNewEndDate] = useState(request.end_date);
   const [workingDays, setWorkingDays] = useState<number | null>(null);
-  
+
   useEffect(() => {
     const calculateDays = async () => {
       const { data: holidaysData } = await supabase.from('official_holidays').select('date');
@@ -37,7 +41,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     };
     calculateDays();
   }, [request.start_date, request.end_date, supabase, weekendConfiguration]);
-  
+
   const handleAction = async (action: 'approve' | 'reject') => {
     setIsSubmitting(true);
     let result;
@@ -63,12 +67,12 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
     }
     setIsSubmitting(false);
   };
-  
+
   const handleUpdateDates = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-   const originalDates = `${safeLocaleDate(request.start_date)} - ${safeLocaleDate(request.end_date)}`;
+    const originalDates = `${safeLocaleDate(request.start_date)} - ${safeLocaleDate(request.end_date)}`;
     formData.append('original_dates', originalDates);
     
     const result = await updateLeaveRequestDates(formData);
@@ -89,7 +93,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
 
   const approveText = profile?.role === 'admin' ? 'Nihai Onay' : 'Koordinatör Onayı';
   const rejectText = profile?.role === 'admin' ? 'Nihai Red' : 'Koordinatör Reddi';
-  
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800/80 border border-white/10 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] flex flex-col">
@@ -125,17 +129,17 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                     </div>
                   </div>
                 </form>
-               ) : (
+              ) : (
                 <div className="flex items-center gap-2">
                   <div>
                     <p className="text-sm text-gray-400">İzin Tarihleri</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                       <p className="font-semibold text-lg">
-    {safeLocaleDate(request.start_date)} - {safeLocaleDate(request.end_date)}
-</p>
+                      <p className="font-semibold text-lg">
+                          {safeLocaleDate(request.start_date)} - {safeLocaleDate(request.end_date)}
+                      </p>
                       {workingDays !== null && (
                          <span className="text-sm text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
-                          {workingDays} iş günü
+                           {workingDays} iş günü
                         </span>
                       )}
                     </div>
@@ -154,7 +158,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
               <div key={index} className="border-l-2 pl-4 border-gray-600">
                 <p className="font-semibold">{log.action} <span className="text-sm font-normal text-gray-400">- {log.actor}</span></p>
                 <p className="text-sm text-gray-300 italic">&quot;{log.notes}&quot;</p>
-                <p className="text-xs text-gray-500 mt-1">{new Date(log.timestamp.replace(/-/g, '/')).toLocaleString('tr-TR')}</p>
+                <p className="text-xs text-gray-500 mt-1">{safeNewDate(log.timestamp).toLocaleString('tr-TR')}</p>
               </div>
             ))}
           </div>
@@ -179,7 +183,7 @@ export default function RequestDetailsModal({ request, onClose }: ModalProps) {
                 >
                   <Trash2 size={16} /> {rejectText}
                 </button>
-                 <button 
+                <button 
                   onClick={() => handleAction('approve')}
                   disabled={isSubmitting}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600/80 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"

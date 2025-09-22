@@ -8,7 +8,6 @@ import { updateUserDashboardLayout, type DashboardLayoutSettings } from '@/app/a
 import type { Layout } from 'react-grid-layout';
 
 const supabase = createClient();
-
 type Profile = {
   full_name: string;
   role: string;
@@ -42,25 +41,26 @@ export const ALL_WIDGETS: WidgetDefinition[] = [
   { id: 'monthlyLeaveRate', name: 'Aylık İzin Oranı', description: 'Bu ay izin kullanan personellerin toplam personele oranını gösterir.' },
   { id: 'leaveStatusDistribution', name: 'İzin Durumları Dağılımı', description: 'Bekleyen ve nihai onay bekleyen talep sayılarını karşılaştırır.' },
 ];
+
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
   layouts: {
     lg: [
-      { i: 'welcome', x: 0, y: 0, w: 4, h: 4, minW: 4, minH: 4 },
-      { i: 'weather', x: 0, y: 0, w: 2, h: 4, minW: 2, minH: 4 },
-      { i: 'quickActions', x: 0, y: 0, w: 12, h: 2, minW: 6, minH: 2, maxH: 2 },
-      { i: 'pending', x: 0, y: 1, w: 3, h: 2, maxH: 2 },
-      { i: 'approvedThisMonth', x: 0, y: 0, w: 3, h: 2, maxH: 2 },
-      { i: 'onLeaveToday', x: 0, y: 0, w: 3, h: 2, maxH: 2 },
-      { i: 'awaitingFinal', x: 0, y: 0, w: 3, h: 2, maxH: 2 },
-      { i: 'totalPersonnel', x: 0, y: 0, w: 3, h: 2, maxH: 2 },
-      { i: 'totalRegions', x: 0, y: 0, w: 3, h: 2, maxH: 2 },
-      { i: 'awaitingApproval', x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
-      { i: 'rejectedLeaves', x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
-      { i: 'recentRequests', x: 0, y: 0, w: 3, h: 5, minW: 3, minH: 4, maxH: 5 },
-      { i: 'upcomingLeaves', x: 0, y: 0, w: 3, h: 5, minW: 3, minH: 4, maxH: 5 },
-      { i: 'leaveTypeDistribution', x: 0, y: 0, w: 4, h: 5, minW: 3, minH: 4, maxH: 5 },
-      { i: 'monthlyLeaveRate', x: 0, y: 0, w: 0, h: 4, minW: 3, minH: 4, maxH: 5 },
-      { i: 'leaveStatusDistribution', x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
+      { i: 'welcome', x: 0, y: 0, w: 6, h: 4, minW: 4, minH: 4 },
+      { i: 'weather', x: 6, y: 0, w: 3, h: 4, minW: 2, minH: 4 },
+      { i: 'quickActions', x: 9, y: 0, w: 3, h: 4, minW: 3, minH: 4 },
+      { i: 'pending', x: 0, y: 4, w: 3, h: 2, maxH: 2 },
+      { i: 'approvedThisMonth', x: 3, y: 4, w: 3, h: 2, maxH: 2 },
+      { i: 'onLeaveToday', x: 6, y: 4, w: 3, h: 2, maxH: 2 },
+      { i: 'totalPersonnel', x: 9, y: 4, w: 3, h: 2, maxH: 2 },
+      { i: 'awaitingFinal', x: 0, y: 6, w: 3, h: 2, maxH: 2 },
+      { i: 'totalRegions', x: 3, y: 6, w: 3, h: 2, maxH: 2 },
+      { i: 'awaitingApproval', x: 0, y: 8, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
+      { i: 'recentRequests', x: 6, y: 8, w: 3, h: 5, minW: 3, minH: 4, maxH: 5 },
+      { i: 'upcomingLeaves', x: 9, y: 8, w: 3, h: 5, minW: 3, minH: 4, maxH: 5 },
+      { i: 'leaveTypeDistribution', x: 0, y: 13, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
+      { i: 'leaveStatusDistribution', x: 6, y: 13, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
+      { i: 'monthlyLeaveRate', x: 0, y: 18, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
+      { i: 'rejectedLeaves', x: 6, y: 18, w: 6, h: 5, minW: 4, minH: 5, maxH: 5 },
     ],
   },
   visible: {
@@ -98,7 +98,6 @@ type SettingsContextType = {
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
-
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -122,22 +121,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           const audio = new Audio(url);
           audio.play().catch(e => console.error("Ses çalma hatası:", e));
       } catch (e) {
-          console.error("Audio nesnesi oluşturma hatası:", e);
+           console.error("Audio nesnesi oluşturma hatası:", e);
       }
   }, [audioContext]);
-  
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContext) {
         setAudioContext(new window.AudioContext());
     }
   }, [audioContext]);
-
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-
-        // YENİ LOGIC: Eğer İK Portalı kullanıcısı varsa, onun ayarlarını yükle
         if (user) {
           setUser(user);
           const [profileRes, settingsRes, weekendRes] = await Promise.all([
@@ -149,14 +144,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           if (profileRes.data) {
               setProfile(profileRes.data as Profile);
               const { data: count, error } = await supabase.rpc('get_notification_count', {
-                  user_role: profileRes.data.role,
+                   user_role: profileRes.data.role,
                    user_region_id: profileRes.data.region_id
               });
              
                if (!error) { setNotificationCount(count); }
           }
           if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
-
           if (settingsRes.data) {
             const userSettings = settingsRes.data as UserSettings;
             setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
@@ -186,11 +180,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
           }
         } else {
-          // YENİ LOGIC: Eğer İK Portalı kullanıcısı yoksa, bu bir AykaSosyal kullanıcısıdır.
-          // Sizin istediğiniz varsayılan değerleri uyguluyoruz.
           setProfile(null);
           setUser(null);
-          setBg("/backgrounds/bg8.jpg"); // Sosyal kullanıcılar için farklı bir arkaplan
+          setBg("/backgrounds/bg8.jpg"); 
           setTintValue(-5);
           setBlurPx(16);
           setGrainOpacity(0);
@@ -204,14 +196,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     fetchInitialData();
   }, [audioContext]);
-  
+
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
-    if (user) { // Sadece İK kullanıcıları layout'u kaydedebilir
+    if (user) { 
         updateUserDashboardLayout(newLayout);
     }
   };
-  
+
   const value = {
     supabase,
     user,

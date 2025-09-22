@@ -1,0 +1,3 @@
+# Performans Raporları
+
+Performans raporu sayfası, bölgelerin ve personellerin saha aktivitelerini analiz etmek için kullanılır. Raporlar, belirli bir tarih aralığı için oluşturulur. 'Kullanıcı Bazlı Analiz' ile kişilerin günlük performansını, 'İş Bazlı Analiz' ile en çok hangi işlerin yapıldığını görebilirsiniz. 'Karşılaştırma' sekmesi, birden fazla personelin performansını aynı grafik üzerinde görmeyi sağlar.

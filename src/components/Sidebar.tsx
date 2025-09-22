@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from 'react';
 import { 
     Home, 
-    Calendar, 
     Users, 
     Briefcase, 
     ChevronsLeft, 
@@ -17,32 +16,30 @@ import {
     Bell, 
     ChevronDown, 
     ChevronUp, 
-    Archive, 
-    Box, 
     Wallet, 
     TrendingUp, 
     BarChart3, 
     Clock,
-    MessageSquare
+    MessageSquare,
+    User,
+    CalendarPlus,
 } from 'lucide-react';
 import { useSettings } from "@/contexts/SettingsContext";
 import Image from "next/image";
 
+// "Takvim" linki bu diziden kaldırıldı.
 const navLinks = [
   { name: "Ana Panel", href: "/dashboard", icon: Home },
   { name: "Bildirimler", href: "/dashboard/notifications", icon: Bell },
   { name: "İzin Talepleri", href: "/dashboard/requests", icon: Briefcase },
+  { name: "Avans Talepleri", href: "/dashboard/avans-talepleri", icon: Wallet },
   { name: "Personel Listesi", href: "/dashboard/personnel", icon: Users },
-  { name: "Takvim", href: "/dashboard/calendar", icon: Calendar },
 ];
 const puantajLinks = [
     { name: "Puantaj Cetveli", href: "/dashboard/timesheet", icon: ClipboardList },
     { name: "Teknik Zaman Menüsü", href: "/dashboard/timesheet/technical-schedule", icon: Clock },
     { name: "Teknik Takvim Ayarları", href: "/dashboard/timesheet/technical-schedule-settings", icon: Settings },
     { name: "Fazla Mesai Raporu", href: "/dashboard/timesheet/overtime-report", icon: AlarmPlus }
-];
-const inventoryLinks = [
-  { name: "Stok Yönetimi", href: "/dashboard/inventory/stock", icon: Box }
 ];
 const socialLinks = [
   { name: "AykaSosyal Akış", href: "/dashboard/aykasosyal", icon: MessageSquare },
@@ -58,24 +55,21 @@ const adminLinks = [
   { name: "Sistem Ayarları", href: "/dashboard/settings", icon: Settings },
   { name: "Bölgeler", href: "/dashboard/regions", icon: Map }
 ];
-
 type SidebarProps = {
   mobileOpen: boolean;
   setMobileOpen: (isOpen: boolean) => void;
   isCollapsed: boolean;
   setIsCollapsed: (isCollapsed: boolean) => void;
 };
-
 export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const { profile, tintValue, grainOpacity, blurPx, notificationCount } = useSettings();
   
   const [isIkMenuOpen, setIsIkMenuOpen] = useState(false);
   const [isPuantajOpen, setIsPuantajOpen] = useState(false);
-  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
-  const [isSocialOpen, setIsSocialOpen] = useState(true); // Sosyal menü varsayılan açık gelsin
+  const [isSocialOpen, setIsSocialOpen] = useState(true);
 
   const grainEffectOpacity = grainOpacity / 100;
   const color = tintValue >= 0 ? '255, 255, 255' : '0, 0, 0';
@@ -85,16 +79,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
     if (socialLinks.some(link => pathname.startsWith(link.href))) {
       setIsSocialOpen(true);
     }
-    // Sadece profile sahip kullanıcılar için diğer menülerin durumunu kontrol et
     if (profile) {
         if (navLinks.some(link => pathname.startsWith(link.href) && link.href !== '/dashboard')) {
             setIsIkMenuOpen(true);
         }
         if (puantajLinks.some(link => pathname.startsWith(link.href))) {
             setIsPuantajOpen(true);
-        }
-        if (inventoryLinks.some(link => pathname.startsWith(link.href))) {
-            setIsInventoryOpen(true);
         }
         if (performanceLinks.some(link => pathname.startsWith(link.href))) {
             setIsPerformanceOpen(true);
@@ -138,13 +128,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
           </div>
           
           <nav className="flex-1 p-2 overflow-y-auto">
-    
-            {/* YENİ: Sadece İK Portalı kullanıcıları bu menüleri görür */}
+ 
             {profile && (
               <>
                 {/* Ayka İK Dropdown */}
                 <div>
-                  <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
+                   <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
                       <button onClick={() => setIsIkMenuOpen(!isIkMenuOpen)} className={`flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-white/5 transition-colors ${isIkMenuOpen && !isCollapsed ? 'bg-white/5' : ''}`}>
                           <div className="flex items-center gap-3"> <Users size={18} /> <span className="font-semibold text-sm">Ayka İnsan Kaynakları</span> </div>
                           {isIkMenuOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -169,20 +158,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
                   </div>
                 </div>
                 <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
-
-                {/* Envanter Dropdown */}
-                <div>
-                  <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
-                      <button onClick={() => setIsInventoryOpen(!isInventoryOpen)} className={`flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-white/5 transition-colors ${isInventoryOpen && !isCollapsed ? 'bg-white/5' : ''}`}>
-                          <div className="flex items-center gap-3"> <Archive size={18} /> <span className="font-semibold text-sm">Envanter</span> </div>
-                          {isInventoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
-                  </div>
-                  <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isInventoryOpen || isCollapsed ? 'max-h-[500px]' : 'max-h-0'}`}>
-                    <ul> {inventoryLinks.map((link) => { const isActive = pathname.startsWith(link.href); return ( <li key={link.name} className="group relative"> <Link href={link.href} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"} ${isCollapsed ? 'md:justify-center' : ''}`}> <link.icon className="w-5 h-5 flex-shrink-0" /> <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>{link.name}</span> </Link> </li> ); })} </ul>
-                  </div>
-                </div>
-                <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+                
+                {/* Envanter Menüsü TAMAMEN KALDIRILDI */}
 
                 {/* Performans İzleme Dropdown */}
                 <div>
@@ -208,7 +185,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
                   </li>
                 </ul>
 
-                {/* Yönetim Menüsü (Sadece Admin görebilir) */}
                 {profile.role === 'admin' && (
                     <>
                     <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
@@ -221,13 +197,47 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
                         </div>
                         <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isAdminMenuOpen || isCollapsed ? 'max-h-[500px]' : 'max-h-0'}`}>
                         <ul> {adminLinks.map((link) => { const isActive = pathname.startsWith(link.href); return ( <li key={link.name} className="group relative"> <Link href={link.href} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"} ${isCollapsed ? 'md:justify-center' : ''}`}> <link.icon className="w-5 h-5 flex-shrink-0" /> <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>{link.name}</span> </Link> </li> ); })} </ul>
-                        </div>
+                     </div>
                     </div>
                     </>
                 )}
               </>
+           )}
+           {!profile && (
+              <>
+                <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
+                <div>
+                  <div className={`transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden' : 'opacity-100'}`}>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                          <Users size={18} />
+                          <span className="font-semibold text-sm">Personel İşlemleri</span>
+                      </div>
+                  </div>
+                  <div className="overflow-hidden">
+                    <ul>
+                      {[
+                        { name: "İzin Talebi Oluştur", href: "/dashboard/aykasosyal/izin-talep", icon: CalendarPlus },
+                        { name: "İzinlerim", href: "/dashboard/aykasosyal/izinlerim", icon: Briefcase },
+                        { name: "Avans Talebi Oluştur", href: "/dashboard/aykasosyal/avans-talep", icon: Wallet },
+        { name: "Avanslarım", href: "/dashboard/aykasosyal/avanslarim", icon: ClipboardList },
+        
+                        { name: "Bilgilerim", href: "/dashboard/aykasosyal/profilim", icon: User }
+                      ].map((link) => {
+                        const isActive = pathname.startsWith(link.href);
+                        return (
+                          <li key={link.name} className="group relative">
+                            <Link href={link.href} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1 ${ isActive ? "bg-blue-600/30 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"} ${isCollapsed ? 'md:justify-center' : ''}`}>
+                              <link.icon className="w-5 h-5 flex-shrink-0" />
+                              <span className={`whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'md:opacity-0 md:hidden group-hover:md:inline-block group-hover:md:absolute group-hover:md:left-20 group-hover:md:bg-gray-800 group-hover:md:px-2 group-hover:md:py-1 group-hover:md:rounded-md' : 'opacity-100'}`}>{link.name}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </>
             )}
-
             {/* AykaSosyal menüsü herkese görünür */}
             <div className="px-2 my-2"><div className="border-t border-white/10"></div></div>
             <div>

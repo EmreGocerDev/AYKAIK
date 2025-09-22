@@ -1,10 +1,11 @@
+// YOL: src/app/actions.ts
+
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-// GÜNCELLEME: Güvenli tarih fonksiyonumuzu import ediyoruz.
 import { safeNewDate } from '@/lib/utils';
 import { cookies } from 'next/headers'; 
 import { createPerformanceClient } from '@/lib/supabase/performance';
@@ -24,21 +25,24 @@ type GridLayoutItem = {
   isDraggable?: boolean;
   isResizable?: boolean;
 };
-// Tipleri tanımlayalım
-type HistoryEntry = {
+
+// GÜNCELLEME: Bu tip artık aykasosyal/actions.ts'de kullanılacağı için export edildi.
+export type HistoryEntry = {
   action: string;
   actor: string;
   timestamp: string;
   notes: string;
 };
+
 export type DashboardLayoutSettings = {
   layouts: { [breakpoint: string]: GridLayoutItem[] };
   visible: Record<string, boolean>;
 };
+
 export type LoginState = {
   message: string | null;
 };
-// DÜZELTME: saveTechnicalSchedule için tür tanımı
+
 type TechnicalScheduleEntry = {
   region_id: number;
   date: string;
@@ -48,7 +52,7 @@ type TechnicalScheduleEntry = {
   preset_id?: number | null;
   notes?: string | null;
 };
-// DÜZELTME: getOvertimeReport için tür tanımı
+
 type OvertimeRecord = {
   userName: string;
   date: string;
@@ -74,6 +78,7 @@ export async function createLeaveRequest(formData: FormData) {
     .eq("tc_kimlik_no", rawFormData.tc)
     .eq("email", rawFormData.email_personel)
     .single();
+
   if (personnelError || !personnel) {
     console.error("Personel doğrulama hatası:", personnelError);
     return { success: false, message: "Personel bilgileri hatalı veya bulunamadı." };
@@ -85,6 +90,7 @@ export async function createLeaveRequest(formData: FormData) {
     timestamp: new Date().toISOString(),
     notes: `Talep, personel tarafından '${rawFormData.leave_type}' türünde oluşturuldu.`
   }];
+
   const { error: insertError } = await supabase.from("leave_requests").insert({
     personnel_id: personnel.id,
     start_date: rawFormData.start_date,
@@ -93,6 +99,7 @@ export async function createLeaveRequest(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
+
   if (insertError) {
     return { success: false, message: `Veritabanı hatası: ${insertError.message}` };
   }
@@ -108,22 +115,40 @@ export async function login(prevState: LoginState, formData: FormData) {
     email,
     password,
   });
+
   if (error) {
     return {
       message: 'Giriş bilgileri hatalı. Lütfen tekrar deneyin.',
     };
   }
 
-  // YENİ EKLENEN BÖLÜM BAŞLANGICI
   if (data.user) {
-    // Giriş başarılıysa, AykaSosyal hesabını oluştur/kontrol et ve session başlat
     await createOrLoginSocialUserForMatrix(data.user);
   }
-  // YENİ EKLENEN BÖLÜM SONU
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');
 }
+
+
+export async function deletePersonnel(personnelId: number) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('personnel')
+    .delete()
+    .eq('id', personnelId);
+
+  if (error) {
+    console.error('Personel silme hatası:', error);
+    return { success: false, message: `Veritabanı hatası: ${error.message}` };
+  }
+
+  revalidatePath('/dashboard/personnel');
+  revalidatePath('/dashboard');
+  return { success: true, message: 'Personel başarıyla silindi.' };
+}
+
+// YOL: src/app/actions.ts (Sadece bu iki fonksiyonu güncelleyin)
 
 export async function addPersonnel(formData: FormData) {
   const supabase = createClient();
@@ -132,54 +157,46 @@ export async function addPersonnel(formData: FormData) {
     .select('value')
     .eq('key', 'default_annual_leave_days')
     .single();
+
   if (settingError) {
     return { success: false, message: 'Varsayılan izin günü ayarı okunamadı.' };
   }
   const defaultLeaveDays = Number(setting.value);
 
   const rawFormData = {
-    // Mevcut Alanlar
-    full_name: formData.get('full_name') as string,
-    tc_kimlik_no: formData.get('tc_kimlik_no') as string,
-    email: formData.get('email') as string,
-    start_date: formData.get('start_date') as string,
-    region_id: Number(formData.get('region_id')),
+    "ŞUBE": Number(formData.get("ŞUBE")),
+    "GÖREVİ": formData.get("GÖREVİ") as string,
+    "AY-KA ENERJİ SÖZLEŞME TARİHİ": formData.get("AY-KA ENERJİ SÖZLEŞME TARİHİ") as string || null,
+    "KIDEM TARİHİ": formData.get("KIDEM TARİHİ") as string || null,
+    "ADI SOYADI": formData.get("ADI SOYADI") as string,
+    "TC. KİMLİK NUMARASI": formData.get("TC. KİMLİK NUMARASI") as string,
+    "DOĞUM TARİHİ": formData.get("DOĞUM TARİHİ") as string || null,
+    "DOĞUM YERİ": formData.get("DOĞUM YERİ") as string,
+    "BABA ADI": formData.get("BABA ADI") as string,
+    "MEDENİ HALİ": formData.get("MEDENİ HALİ") as string,
+    "EŞ GELİR DURUMU": formData.get("EŞ GELİR DURUMU") as string,
+    "ÇOCUK SAYISI": Number(formData.get("ÇOCUK SAYISI")),
+    "AGİ YÜZDESİ": formData.get("AGİ YÜZDESİ") as string,
+    "ENGEL ORANI": formData.get("ENGEL ORANI") as string,
+    "ADRES": formData.get("ADRES") as string,
+    "ŞAHSİ TEL NO": formData.get("ŞAHSİ TEL NO") as string,
+    "MAİL ADRESİ": formData.get("MAİL ADRESİ") as string,
+    "MEZUNİYET": formData.get("MEZUNİYET") as string,
+    "BÖLÜM": formData.get("BÖLÜM") as string,
+    "ASKERLİK DURUMU": formData.get("ASKERLİK DURUMU") as string,
+    "TECİL BİTİŞ TARİHİ": formData.get("TECİL BİTİŞ TARİHİ") as string || null,
+    "EHLİYET": formData.get("EHLİYET") as string,
+    "KANGRUBU": formData.get("KANGRUBU") as string,
+    "IBAN NO": formData.get("IBAN NO") as string,
+    "DOĞALGAZ SAYAÇ SÖKME TAKMA BELGESİ": formData.get("DOĞALGAZ SAYAÇ SÖKME TAKMA BELGESİ") as string,
+    "BELGE GEÇERLİLİK TARİHİ": formData.get("BELGE GEÇERLİLİK TARİHİ") as string || null,
+    "ISITMA VE DOĞALGAZ İÇ TESİSAT YAPIM BELGESİ": formData.get("ISITMA VE DOĞALGAZ İÇ TESİSAT YAPIM BELGESİ") as string,
+    "TESİSAT BELGE GEÇERLİLİK TARİHİ": formData.get("TESİSAT BELGE GEÇERLİLİK TARİHİ") as string || null,
+    "PERSONEL AKTİF Mİ?": formData.get("PERSONEL AKTİF Mİ?") === 'on', // <-- EKLENEN SATIR
     annual_leave_days_entitled: defaultLeaveDays,
-    "şube": formData.get('şube') as string,
-    date_of_birth: formData.get('date_of_birth') as string,
-    place_of_birth: formData.get('place_of_birth') as string,
-    father_name: formData.get('father_name') as string,
-    marital_status: formData.get('marital_status') as string,
-    eş_gelir_durumu: formData.get('eş_gelir_durumu') as string,
-    number_of_children: Number(formData.get('number_of_children')),
-    agi_yüzdesi: formData.get('agi_yüzdesi') as string,
-    engel_derecesi: formData.get('engel_derecesi') as string,
-    address: formData.get('address') as string,
-    phone_number: formData.get('phone_number') as string,
-    education_level: formData.get('education_level') as string,
-    "bölüm": formData.get('bölüm') as string,
-    military_service_status: formData.get('military_service_status') as string,
-    ehliyet: formData.get('ehliyet') as string,
-    blood_type: formData.get('blood_type') as string,
-    iban: formData.get('iban') as string,
-    sözleşme_tarihi: formData.get('sözleşme_tarihi') as string,
-    dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
-    belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
-    isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
-  
-    // YENİ EKLENEN ALANLAR
-    department: formData.get('department') as string,
-    job_title: formData.get('job_title') as string,
-    employment_type: formData.get('employment_type') as string,
-    sgk_number: formData.get('sgk_number') as string,
-    is_active: formData.get('is_active') === 'on', // Checkbox değeri 'on' veya null gelir
-    bank_name: formData.get('bank_name') as string,
-    emergency_contact_name: formData.get('emergency_contact_name') as string,
-    emergency_contact_phone: formData.get('emergency_contact_phone') as string,
-    private_health_insurance_company: formData.get('private_health_insurance_company') as string,
-    private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
   };
-  if (!rawFormData.full_name || !rawFormData.tc_kimlik_no) {
+
+  if (!rawFormData["ADI SOYADI"] || !rawFormData["TC. KİMLİK NUMARASI"]) {
     return { success: false, message: 'Ad Soyad ve T.C. Kimlik Numarası zorunludur.' };
   }
 
@@ -197,22 +214,6 @@ export async function addPersonnel(formData: FormData) {
   return { success: true, message: 'Personel başarıyla eklendi.' };
 }
 
-export async function deletePersonnel(personnelId: number) {
-  const supabase = createClient();
-  const { error } = await supabase
-    .from('personnel')
-    .delete()
-    .eq('id', personnelId);
-  if (error) {
-    console.error('Personel silme hatası:', error);
-    return { success: false, message: `Veritabanı hatası: ${error.message}` };
-  }
-
-  revalidatePath('/dashboard/personnel');
-  revalidatePath('/dashboard');
-  return { success: true, message: 'Personel başarıyla silindi.' };
-}
-
 export async function updatePersonnel(formData: FormData) {
   const supabase = createClient();
   const id = Number(formData.get('id'));
@@ -221,51 +222,42 @@ export async function updatePersonnel(formData: FormData) {
   }
 
   const rawFormData = {
-    // Mevcut Alanlar
-    full_name: formData.get('full_name') as string,
-    tc_kimlik_no: formData.get('tc_kimlik_no') as string,
-    email: formData.get('email') as string,
-    start_date: formData.get('start_date') as string,
-    region_id: Number(formData.get('region_id')),
-    "şube": formData.get('şube') as string,
-    date_of_birth: formData.get('date_of_birth') as string,
-    place_of_birth: formData.get('place_of_birth') as string,
-    father_name: formData.get('father_name') as string,
-    marital_status: formData.get('marital_status') as string,
-    eş_gelir_durumu: formData.get('eş_gelir_durumu') as string,
-    number_of_children: Number(formData.get('number_of_children')),
-    agi_yüzdesi: formData.get('agi_yüzdesi') as string,
-  
-    engel_derecesi: formData.get('engel_derecesi') as string,
-    address: formData.get('address') as string,
-    phone_number: formData.get('phone_number') as string,
-    education_level: formData.get('education_level') as string,
-    "bölüm": formData.get('bölüm') as string,
-    military_service_status: formData.get('military_service_status') as string,
-    ehliyet: formData.get('ehliyet') as string,
-    blood_type: formData.get('blood_type') as string,
-    iban: formData.get('iban') as string,
-    sözleşme_tarihi: formData.get('sözleşme_tarihi') as string,
-    dogalgaz_sayac_sokme_takma_belgesi: formData.get('dogalgaz_sayac_sokme_takma_belgesi') as string,
-    belge_geçerlilik_tarihi: formData.get('belge_geçerlilik_tarihi') as string,
-    isitma_ve_dogalgaz_tesisat_belgesi: formData.get('isitma_ve_dogalgaz_tesisat_belgesi') as string,
-    // YENİ EKLENEN ALANLAR
-    
-    department: formData.get('department') as string,
-    job_title: formData.get('job_title') as string,
-    employment_type: formData.get('employment_type') as string,
-    sgk_number: formData.get('sgk_number') as string,
-    is_active: formData.get('is_active') === 'on',
-    bank_name: formData.get('bank_name') as string,
-    emergency_contact_name: formData.get('emergency_contact_name') as string,
-    emergency_contact_phone: formData.get('emergency_contact_phone') as string,
-    private_health_insurance_company: formData.get('private_health_insurance_company') as string,
-    private_health_insurance_policy_number: formData.get('private_health_insurance_policy_number') as string,
+    "ŞUBE": Number(formData.get("ŞUBE")),
+    "GÖREVİ": formData.get("GÖREVİ") as string,
+    "AY-KA ENERJİ SÖZLEŞME TARİHİ": formData.get("AY-KA ENERJİ SÖZLEŞME TARİHİ") as string || null,
+    "KIDEM TARİHİ": formData.get("KIDEM TARİHİ") as string || null,
+    "ADI SOYADI": formData.get("ADI SOYADI") as string,
+    "TC. KİMLİK NUMARASI": formData.get("TC. KİMLİK NUMARASI") as string,
+    "DOĞUM TARİHİ": formData.get("DOĞUM TARİHİ") as string || null,
+    "DOĞUM YERİ": formData.get("DOĞUM YERİ") as string,
+    "BABA ADI": formData.get("BABA ADI") as string,
+    "MEDENİ HALİ": formData.get("MEDENİ HALİ") as string,
+    "EŞ GELİR DURUMU": formData.get("EŞ GELİR DURUMU") as string,
+    "ÇOCUK SAYISI": Number(formData.get("ÇOCUK SAYISI")),
+    "AGİ YÜZDESİ": formData.get("AGİ YÜZDESİ") as string,
+    "ENGEL ORANI": formData.get("ENGEL ORANI") as string,
+    "ADRES": formData.get("ADRES") as string,
+    "ŞAHSİ TEL NO": formData.get("ŞAHSİ TEL NO") as string,
+    "MAİL ADRESİ": formData.get("MAİL ADRESİ") as string,
+    "MEZUNİYET": formData.get("MEZUNİYET") as string,
+    "BÖLÜM": formData.get("BÖLÜM") as string,
+    "ASKERLİK DURUMU": formData.get("ASKERLİK DURUMU") as string,
+    "TECİL BİTİŞ TARİHİ": formData.get("TECİL BİTİŞ TARİHİ") as string || null,
+    "EHLİYET": formData.get("EHLİYET") as string,
+    "KANGRUBU": formData.get("KANGRUBU") as string,
+    "IBAN NO": formData.get("IBAN NO") as string,
+    "DOĞALGAZ SAYAÇ SÖKME TAKMA BELGESİ": formData.get("DOĞALGAZ SAYAÇ SÖKME TAKMA BELGESİ") as string,
+    "BELGE GEÇERLİLİK TARİHİ": formData.get("BELGE GEÇERLİLİK TARİHİ") as string || null,
+    "ISITMA VE DOĞALGAZ İÇ TESİSAT YAPIM BELGESİ": formData.get("ISITMA VE DOĞALGAZ İÇ TESİSAT YAPIM BELGESİ") as string,
+    "TESİSAT BELGE GEÇERLİLİK TARİHİ": formData.get("TESİSAT BELGE GEÇERLİLİK TARİHİ") as string || null,
+    "PERSONEL AKTİF Mİ?": formData.get("PERSONEL AKTİF Mİ?") === 'on', // <-- EKLENEN SATIR
   };
+
   const { error } = await supabase
     .from('personnel')
     .update(rawFormData)
     .eq('id', id);
+
   if (error) {
     console.error("Personel güncelleme hatası:", error);
     if (error.code === '23505') {
@@ -289,6 +281,7 @@ async function updateLeaveRequest(
 
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: "Yetkili profili bulunamadı." };
+
   const { data: currentRequest, error: fetchError } = await supabase
     .from('leave_requests')
     .select('history_log, leave_type')
@@ -303,18 +296,23 @@ async function updateLeaveRequest(
       approved: "Nihai Onay Verildi",
       rejected: "Nihai Red Verildi"
   };
+  
   const newHistoryEntry: HistoryEntry = {
     action: actionTextMap[newStatus],
     actor: `${actorName} (${profile.role})`,
     timestamp: new Date().toISOString(),
     notes: notes || "Not eklenmedi.",
   };
+  
   const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
+  
   const { error: updateError } = await supabase
     .from('leave_requests')
     .update({ status: newStatus, history_log: updatedHistoryLog })
     .eq('id', requestId);
+    
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
+
   if (newStatus === 'approved') {
     const adminSupabase = createAdminClient();
     const { error: rpcError } = await adminSupabase.rpc('generate_timesheet_for_leave', { request_id: requestId });
@@ -352,12 +350,14 @@ export async function updateLeaveRequestDates(formData: FormData) {
   const newStartDate = formData.get('start_date') as string;
   const newEndDate = formData.get('end_date') as string;
   const originalDates = formData.get('original_dates') as string;
+
   if (!requestId || !newStartDate || !newEndDate) {
     return { success: false, message: 'Eksik bilgi.' };
   }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+  
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
@@ -370,9 +370,9 @@ export async function updateLeaveRequestDates(formData: FormData) {
     action: "Tarih Güncellendi",
     actor: `${actorName} (${profile.role})`,
     timestamp: new Date().toISOString(),
-    // GÜNCELLEME: new Date() çağrıları safeNewDate() ile değiştirildi.
     notes: `İzin tarihi değiştirildi. Eski: ${originalDates}, Yeni: ${safeNewDate(newStartDate).toLocaleDateString('tr-TR')} - ${safeNewDate(newEndDate).toLocaleDateString('tr-TR')}`,
   };
+
   const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];
   const { error: updateError } = await supabase
     .from('leave_requests')
@@ -382,6 +382,7 @@ export async function updateLeaveRequestDates(formData: FormData) {
       history_log: updatedHistoryLog 
     })
     .eq('id', requestId);
+
   if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };
 
   revalidatePath('/dashboard/requests');
@@ -398,12 +399,14 @@ export async function createLeaveForPersonnel(formData: FormData) {
     reason: formData.get('reason') as string,
     leave_type: formData.get("leave_type") as string,
   };
+
   if (!personnelId || !rawFormData.start_date || !rawFormData.end_date || !rawFormData.leave_type) {
     return { success: false, message: 'Eksik bilgi. Lütfen tüm alanları doldurun.' };
   }
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: 'Yetkili kullanıcı bulunamadı.' };
+
   const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
   if (!profile) return { success: false, message: 'Yetkili profili bulunamadı.' };
   
@@ -425,6 +428,7 @@ export async function createLeaveForPersonnel(formData: FormData) {
     history_log: initialHistory,
     leave_type: rawFormData.leave_type,
   });
+  
   if (error) {
     return { success: false, message: `Veritabanı hatası: ${error.message}` };
   }
@@ -464,8 +468,8 @@ export async function updateRegion(formData: FormData) {
     sgk_province_code: formData.get('sgk_province_code') as string,
   };
   if (!id || !rawFormData.name) return { success: false, message: 'Gerekli bilgiler eksik.' };
+  
   const { error } = await supabase.from('regions').update(rawFormData).eq('id', id);
-
   if (error) return { success: false, message: `Hata: ${error.message}` };
   
   revalidatePath('/dashboard/regions');
@@ -479,7 +483,9 @@ export async function deleteRegion(regionId: number) {
     .select('id')
     .eq('region_id', regionId)
     .limit(1);
+    
   if (checkError) return { success: false, message: `Kontrol hatası: ${checkError.message}` };
+  
   if (personnel && personnel.length > 0) {
     return { success: false, message: 'Bu bölgede personel bulunduğu için silinemez. Önce personelleri başka bir bölgeye taşıyın.' };
   }
@@ -497,6 +503,7 @@ export async function updateSystemSettings(formData: FormData) {
     { key: 'default_annual_leave_days', value: formData.get('default_annual_leave_days') },
     { key: 'weekend_configuration', value: formData.get('weekend_configuration') }
   ];
+
   try {
     for (const setting of settingsToUpdate) {
       if (setting.value !== null) {
@@ -509,6 +516,7 @@ export async function updateSystemSettings(formData: FormData) {
           .from('system_settings')
           .update({ value: processedValue })
           .eq('key', setting.key);
+          
         if (error) throw error;
       }
     }
@@ -537,6 +545,7 @@ export async function getTechnicalSchedulePresets(regionId: number) {
         .select('*')
         .eq('region_id', regionId)
         .order('preset_id', { ascending: true });
+
     if (error) {
         console.error("Teknik takvim şablonları çekme hatası:", error);
         return { success: false, data: null, message: error.message };
@@ -549,6 +558,7 @@ export async function updateTechnicalScheduleSettings(formData: FormData) {
   const supabase = createAdminClient();
   const regionId = Number(formData.get('region_id'));
   if (!regionId) return { success: false, message: 'Bölge bilgisi eksik.' };
+
   try {
     const presetsToUpsert = Array.from({ length: 5 }).map((_, i) => ({
       region_id: regionId,
@@ -557,12 +567,14 @@ export async function updateTechnicalScheduleSettings(formData: FormData) {
       start_time: formData.get(`preset_${i}_start_time`) as string,
       end_time: formData.get(`preset_${i}_end_time`) as string,
       break_hours: Number(formData.get(`preset_${i}_break_hours`)),
-      color: formData.get(`preset_${i}_color`) as string, // YENİ EKLENDİ
+      color: formData.get(`preset_${i}_color`) as string,
       updated_at: new Date().toISOString()
     }));
+    
     const { error } = await supabase
       .from('technical_schedule_presets')
       .upsert(presetsToUpsert, { onConflict: 'region_id, preset_id' });
+      
     if (error) throw error;
 
     revalidatePath('/dashboard/timesheet/technical-schedule-settings');
@@ -584,28 +596,29 @@ export async function createUser(formData: FormData) {
   const password = formData.get('password') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
+  
   if (!email || !password || !full_name || !region_id) {
     return { success: false, message: 'Tüm alanlar zorunludur.' };
   }
 
-  // 1. Auth kullanıcısını oluştur
   const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
   });
+
   if (authError) {
     console.error("Auth kullanıcısı oluşturma hatası:", authError);
     return { success: false, message: `Kullanıcı oluşturulamadı: ${authError.message}` };
   }
 
-  // 2. 'profiles' tablosuna 'upsert' ile veriyi ekle/güncelle
   const { error: profileError } = await adminSupabase.from('profiles').upsert({
     id: authData.user.id,
     full_name,
     region_id,
     role: 'coordinator',
   });
+  
   if (profileError) {
     console.error("Profil oluşturma/güncelleme hatası:", profileError);
     await adminSupabase.auth.admin.deleteUser(authData.user.id);
@@ -621,6 +634,7 @@ export async function updateUser(formData: FormData) {
   const userId = formData.get('userId') as string;
   const full_name = formData.get('full_name') as string;
   const region_id = Number(formData.get('region_id'));
+  
   if (!userId || !full_name || !region_id) {
     return { success: false, message: 'Eksik bilgi.' };
   }
@@ -629,6 +643,7 @@ export async function updateUser(formData: FormData) {
     .from('profiles')
     .update({ full_name, region_id })
     .eq('id', userId);
+    
   if (error) {
     console.error("Kullanıcı güncelleme hatası:", error);
     return { success: false, message: `Güncelleme hatası: ${error.message}` };
@@ -641,6 +656,7 @@ export async function updateUser(formData: FormData) {
 export async function deleteUser(userId: string) {
   const adminSupabase = createAdminClient();
   const { error } = await adminSupabase.auth.admin.deleteUser(userId);
+  
   if (error) {
     console.error("Kullanıcı silme hatası:", error);
     return { success: false, message: `Silme hatası: ${error.message}` };
@@ -653,6 +669,7 @@ export async function deleteUser(userId: string) {
 export async function getUserProfiles() {
   const supabase = createAdminClient();
   const { data, error } = await supabase.rpc('get_user_profiles');
+  
   if (error) {
     console.error("Server Action getUserProfiles Hatası:", error);
   }
@@ -663,6 +680,7 @@ export async function getUserProfiles() {
 export async function updateUserDashboardLayout(layout: DashboardLayoutSettings) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  
   if (!user) {
     return { success: false, message: 'Kullanıcı bulunamadı.' };
   }
@@ -673,6 +691,7 @@ export async function updateUserDashboardLayout(layout: DashboardLayoutSettings)
       user_id: user.id,
       dashboard_layout: layout,
     }, { onConflict: 'user_id' });
+    
   if (error) {
     console.error("Dashboard layout güncelleme hatası:", error);
     return { success: false, message: 'Layout güncellenemedi.' };
@@ -692,12 +711,14 @@ const getTableNameForRegion = (regionName: string) => {
         .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
         .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
         .replace(/\s+/g, '_');
+        
     return `performance_logs_${sanitizedName}`;
 };
 
 export async function getAvailablePerformanceDates(regionName: string): Promise<{ success: boolean; data?: string[]; message?: string; }> {
     "use server";
     if (!regionName) return { success: false, message: "Bölge adı belirtilmedi." };
+    
     const performanceSupabase = createPerformanceClient();
     const tableName = getTableNameForRegion(regionName);
 
@@ -725,6 +746,7 @@ export async function getPerformanceDataForDateRange(regionName: string, startDa
             .gte('log_date', startDate)
             .lte('log_date', endDate)
             .order('log_date', { ascending: true });
+            
         if (error) throw error;
         
         return { success: true, data: data as { log_date: string, data: DailyPerformanceRecord[] }[] };
@@ -739,6 +761,7 @@ type AggregatedRegionData = {
   totalActivity: number;
   jobCounts: { [key: string]: number };
 };
+
 export async function getAllRegionsPerformanceData(
   startDate: string,
   endDate: string
@@ -767,10 +790,12 @@ export async function getAllRegionsPerformanceData(
           ...response
         }));
     });
+    
     const results = await Promise.all(dataPromises);
 
     const aggregatedData: { [key: string]: { totalActivity: number, jobCounts: { [job: string]: number } } } = {};
     const keysToExclude = new Set(['date', 'user', 'total', 'endTime', 'idleTime', 'startTime', ...Array.from({ length: 48 }, (_, i) => `${Math.floor(i / 2).toString().padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`)]);
+    
     for (const result of results) {
       if (result.error) {
         console.warn(`'${result.regionName}' bölgesi için veri çekilirken hata oluştu:`, result.error.message);
@@ -800,6 +825,7 @@ export async function getAllRegionsPerformanceData(
       regionName,
       ...values
     }));
+    
     return { success: true, data: finalData };
 
   } catch (error) {
@@ -813,19 +839,21 @@ export async function getTechnicalScheduleForMonth(regionId: number, year: numbe
   const supabase = createAdminClient();
   const startDate = new Date(Date.UTC(year, month, 1)).toISOString();
   const endDate = new Date(Date.UTC(year, month + 1, 0)).toISOString();
+  
   const { data, error } = await supabase
     .from('technical_schedules')
-    .select('date, start_time, end_time, break_hours, preset_id') // preset_id eklendi
+    .select('date, start_time, end_time, break_hours, preset_id')
     .eq('region_id', regionId)
     .gte('date', startDate)
     .lte('date', endDate);
+    
   if (error) {
     console.error("Teknik takvim verisi çekme hatası:", error);
     return { success: false, data: null, message: error.message };
   }
   return { success: true, data, message: 'Veri başarıyla çekildi.' };
 }
-// YENİ: Teknik takvim verilerini toplu olarak kaydeder/günceller
+
 export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[]){
     "use server";
     const supabase = createAdminClient();
@@ -837,11 +865,13 @@ export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[])
         end_time: s.end_time || null,
         break_hours: s.break_hours || null,
         notes: s.notes || null,
-        preset_id: s.preset_id || null // preset_id eklendi
+        preset_id: s.preset_id || null
     }));
+    
     const { error } = await supabase
         .from('technical_schedules')
         .upsert(dataToUpsert, { onConflict: 'region_id,date' });
+        
     if (error) {
         console.error("Teknik takvim kaydetme hatası:", error);
         return { success: false, message: `Kayıt hatası: ${error.message}` };
@@ -850,6 +880,7 @@ export async function saveTechnicalSchedule(schedules: TechnicalScheduleEntry[])
     revalidatePath('/dashboard/timesheet/technical-schedule');
     return { success: true, message: 'Takvim başarıyla güncellendi.' };
 }
+
 export async function getOvertimeReport(regionName: string, startDate: string, endDate: string) {
     "use server";
     const mainSupabase = createAdminClient();
@@ -868,6 +899,7 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
         if (schedulesError) throw schedulesError;
 
         const scheduleMap = new Map(schedules.map(s => [s.date, { start: s.start_time, end: s.end_time }]));
+        
         const getTableNameForRegion = (name: string) => {
             const lowerCaseRegionName = name.toLowerCase();
             if (lowerCaseRegionName === 'samsun') return 'performance_logs';
@@ -900,6 +932,7 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
             
             const scheduledStartSeconds = timeStringToSeconds(dailySchedule.start);
             const scheduledEndSeconds = timeStringToSeconds(dailySchedule.end);
+
             for (const userRecord of (dayLog.data as DailyPerformanceRecord[])) {
                 const actualStartSeconds = timeStringToSeconds(userRecord.startTime);
                 const actualEndSeconds = timeStringToSeconds(userRecord.endTime);
@@ -920,7 +953,6 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
                     date: date,
                     scheduledStart: dailySchedule.start,
                     scheduledEnd: dailySchedule.end,
-                
                     actualStart: userRecord.startTime,
                     actualEnd: userRecord.endTime,
                     totalOvertimeSeconds: totalOvertime
@@ -936,7 +968,7 @@ export async function getOvertimeReport(regionName: string, startDate: string, e
         return { success: false, message: `Rapor oluşturulamadı: ${message}` };
     }
 }
-// DÜZELTME: 'any' tipini kullanmaktan kaçınmak için Matrix kullanıcı tipi tanımlandı.
+
 type MatrixUser = {
   id: string;
   email?: string;
@@ -945,37 +977,35 @@ type MatrixUser = {
     [key: string]: unknown;
   };
 };
+
 async function createOrLoginSocialUserForMatrix(matrixUser: MatrixUser) {
   const adminSupabase = createAdminClient();
-  // 1. Mevcut bir sosyal medya hesabı var mı diye kontrol et
   let { data: socialUser } = await adminSupabase
     .from('social_users')
     .select('id')
     .eq('matrix_user_id', matrixUser.id)
     .single();
-  // 2. Eğer sosyal medya hesabı yoksa, oluştur
+
   if (!socialUser) {
     const { data: newSocialUser, error } = await adminSupabase
       .from('social_users')
       .insert({
         matrix_user_id: matrixUser.id,
-        email: matrixUser.email || 'email-yok@ayka.com', // E-posta zorunlu olduğu için
+        email: matrixUser.email || 'email-yok@ayka.com',
         full_name: matrixUser.user_metadata.full_name || 'İsimsiz Kullanıcı',
-        // Kullanıcı adı e-postanın @'den önceki kısmı olabilir, veya rastgele
         username: matrixUser.email?.split('@')[0] || `kullanici_${Math.random().toString(36).substring(2, 8)}`,
-        // Bu hesaplar şifre ile giriş yapmayacağı için password_hash'i geçici bir değerle dolduruyoruz.
         password_hash: '$2a$10$NotRealPasswordHashForMatrixUser'
       })
       .select('id')
       .single();
+      
     if (error) {
       console.error("Otomatik sosyal hesap oluşturma hatası:", error);
-      return; // Hata olsa bile ana girişi engelleme
+      return;
     }
     socialUser = newSocialUser;
   }
   
-  // 3. AykaSosyal için session cookie'sini oluştur
   if (socialUser) {
     const sessionData = { userId: socialUser.id };
     (await cookies()).set('aykasosyal_session', JSON.stringify(sessionData), {
@@ -988,14 +1018,111 @@ async function createOrLoginSocialUserForMatrix(matrixUser: MatrixUser) {
 }
 
 export async function signOutUser() {
-  // AykaSosyal için oluşturduğumuz özel cookie'yi silelim
   const cookieStore = await cookies();
-  // DÜZELTME: await eklendi
   cookieStore.delete('aykasosyal_session');
 
-  // Supabase'in kendi oturumunu (İK Portalı) kapatalım
   const supabase = createClient();
   await supabase.auth.signOut();
-  // Kullanıcıyı ana giriş sayfasına yönlendirelim
+  
   redirect('/');
+}
+// Bu fonksiyonu src/app/actions.ts dosyasının sonuna ekleyin
+
+export async function saveTimesheetExtras(dataToSave: {
+    personnel_id: number;
+    year: number;
+    month: number;
+    missing_days: number | null;
+    additional_pay: number | null;
+    notes: string | null;
+}[]) {
+    "use server";
+    const supabase = createAdminClient();
+
+    const upsertData = dataToSave.map(item => ({
+        personnel_id: item.personnel_id,
+        year: item.year,
+        month: item.month + 1, // JS ayları 0'dan başlar, veritabanına 1'den başlayarak kaydet
+        missing_days: item.missing_days,
+        additional_pay: item.additional_pay,
+        notes: item.notes,
+    }));
+
+    const { error } = await supabase
+        .from('timesheet_extras')
+        .upsert(upsertData, { onConflict: 'personnel_id,year,month' });
+
+    if (error) {
+        console.error("Puantaj ek verileri kaydedilirken hata:", error);
+        return { success: false, message: `Hata: ${error.message}` };
+    }
+
+    revalidatePath('/dashboard/timesheet');
+    return { success: true, message: 'Değişiklikler başarıyla kaydedildi.' };
+}
+
+async function updateAdvanceRequest(
+  requestId: number, 
+  newStatus: 'approved_by_coordinator' | 'rejected_by_coordinator' | 'approved' | 'rejected', 
+  notes: string
+) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();   // [cite: 63]
+  if (!user) return { success: false, message: "Yetkili kullanıcı bulunamadı." };   // [cite: 63]
+
+  const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();   // [cite: 64]
+  if (!profile) return { success: false, message: "Yetkili profili bulunamadı." };   // [cite: 65]
+
+  const { data: currentRequest, error: fetchError } = await supabase
+    .from('cash_advance_requests')
+    .select('history_log')
+    .eq('id', requestId)
+    .single();
+
+  if (fetchError) return { success: false, message: "Avans talebi bulunamadı." };
+  
+  const actorName = profile.full_name || user.email;   // [cite: 68]
+  const actionTextMap = {
+      approved_by_coordinator: "Koordinatör Onayladı",
+      rejected_by_coordinator: "Koordinatör Reddetti",
+      approved: "Nihai Onay Verildi",
+      rejected: "Nihai Red Verildi"
+  };   // [cite: 68]
+
+  const newHistoryEntry: HistoryEntry = {
+    action: actionTextMap[newStatus],
+    actor: `${actorName} (${profile.role})`,
+    timestamp: new Date().toISOString(),
+    notes: notes || "Not eklenmedi.",
+  };   // [cite: 69, 70]
+  
+  const updatedHistoryLog = [...(currentRequest.history_log as HistoryEntry[] || []), newHistoryEntry];   // [cite: 70]
+
+  const { error: updateError } = await supabase
+    .from('cash_advance_requests')
+    .update({ status: newStatus, history_log: updatedHistoryLog })
+    .eq('id', requestId);
+
+  if (updateError) return { success: false, message: `Güncelleme hatası: ${updateError.message}` };   // [cite: 72]
+  
+  revalidatePath('/dashboard/notifications');
+  revalidatePath('/dashboard/requests'); // İzinler sayfasıyla aynı sayfada gösterilecekse
+  return { success: true, message: `Avans talebi başarıyla güncellendi.` };
+}
+
+// Avans Onay/Red sarmalayıcı (wrapper) fonksiyonları
+export async function coordinatorApproveAdvance(requestId: number, notes: string) {
+  return updateAdvanceRequest(requestId, 'approved_by_coordinator', notes);
+}
+
+export async function coordinatorRejectAdvance(requestId: number, notes: string) {
+  return updateAdvanceRequest(requestId, 'rejected_by_coordinator', notes);
+}
+
+export async function adminApproveAdvance(requestId: number, notes: string) {
+  return updateAdvanceRequest(requestId, 'approved', notes);
+}
+
+export async function adminRejectAdvance(requestId: number, notes: string) {
+  return updateAdvanceRequest(requestId, 'rejected', notes);
 }

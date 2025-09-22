@@ -1,3 +1,5 @@
+// YOL: src/components/CreateLeaveModal.tsx
+
 "use client";
 
 import { useState, FormEvent } from 'react';
@@ -6,7 +8,6 @@ import { createLeaveForPersonnel } from '@/app/actions';
 import { X, CalendarPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import GlassCard from './GlassCard';
-// DÜZELTME: Personnel tipi, doğru yer olan @/types/index dosyasından import edildi.
 import type { Personnel } from '@/types/index';
 
 type ModalProps = {
@@ -32,6 +33,7 @@ export default function CreateLeaveModal({ personnel, onClose }: ModalProps) {
     }
     setIsSubmitting(false);
   };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <GlassCard
@@ -47,7 +49,8 @@ export default function CreateLeaveModal({ personnel, onClose }: ModalProps) {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-2xl font-bold">İzin Talebi Oluştur</h2>
-              <p className="text-gray-300">{personnel.full_name} adına</p>
+              [cite_start]{/* DÜZELTME: 'full_name' yerine 'ADI SOYADI' kullanıldı [cite: 2383] */}
+              <p className="text-gray-300">{personnel["ADI SOYADI"]} adına</p>
             </div>
             <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
               <X size={24} />

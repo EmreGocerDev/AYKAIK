@@ -1,3 +1,5 @@
+// YOL: src/app/dashboard/notifications/page.tsx
+
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
@@ -8,18 +10,22 @@ import { Bell, Check, ThumbsDown, Hourglass } from 'lucide-react';
 import type { LeaveRequest } from '../requests/page';
 // GÜNCELLEME: Güvenli tarih fonksiyonunu import ediyoruz.
 import { safeNewDate } from '@/lib/utils';
+import toast from 'react-hot-toast'; // <--- EKLENEN SATIR
 
 type Notification = Omit<LeaveRequest, 'total_count'>;
+
 export default function NotificationsPage() {
   const { supabase, profile, tintValue, blurPx, borderRadiusPx, grainOpacity, setNotificationCount } = useSettings();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+
   const statusInfo: { [key: string]: { icon: React.ReactNode, color: string, text: string } } = {
     pending: { icon: <Hourglass size={16} />, color: "text-yellow-400", text: "Onay Bekliyor" },
     approved_by_coordinator: { icon: <Check size={16} />, color: "text-sky-400", text: "Koordinatör Onayladı" },
     rejected_by_coordinator: { icon: <ThumbsDown size={16} />, color: "text-orange-400", text: "Koordinatör Reddetti" },
   };
+
   const fetchNotifications = useCallback(async () => {
     if (!profile) return;
     
@@ -30,6 +36,7 @@ export default function NotificationsPage() {
 
     if (error) {
         console.error("Bildirimler çekilirken hata:", error);
+        toast.error("Bildirimler yüklenemedi."); // Bu satır hataya neden oluyordu
     } else {
        setNotifications(data as Notification[]);
     }
@@ -73,6 +80,7 @@ export default function NotificationsPage() {
   };
 
   const pageTitle = profile?.role === 'admin' ? "İşlem Bekleyen Talepler" : "Bölgenizdeki Onay Bekleyen Talepler";
+
   return (
     <>
       <div className="p-4 md:p-8 text-white">

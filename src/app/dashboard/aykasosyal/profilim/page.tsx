@@ -9,7 +9,6 @@ import GlassCard from "@/components/GlassCard";
 import { User, AlertTriangle } from "lucide-react";
 import type { Personnel } from "@/types/index";
 
-// /dashboard/personnel/page.tsx'den alınan yardımcı bileşen
 const DetailRow = ({ label, value }: { label: string, value: ReactNode }) => {
     if (value === null || value === undefined || value === '') return null;
     return (
@@ -20,10 +19,8 @@ const DetailRow = ({ label, value }: { label: string, value: ReactNode }) => {
     );
 };
 
-// Tarih formatlama için yardımcı fonksiyon
 const formatDate = (dateString?: string | null) => {
     if (!dateString) return null;
-    // Tarayıcı uyumluluğu için '-' yerine '/' kullanıyoruz
     return new Date(dateString.replace(/-/g, '/')).toLocaleDateString('tr-TR');
 };
 
