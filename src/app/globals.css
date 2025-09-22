@@ -394,3 +394,124 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
 .animate-backdrop-close {
   animation: fadeOut 250ms ease-in forwards;
 }
+
+
+/* YOL: src/app/globals.css */
+
+/* --- YENİ ÇOK RENKLİ MATRIX ARKA PLAN ANİMASYONU --- */
+.matrix-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  display: flex;
+  overflow: hidden;
+  z-index: 0;
+
+  
+}
+
+.matrix-pattern {
+  position: relative;
+  width: 1000px;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.matrix-column {
+  position: absolute;
+  top: -100%;
+  width: 20px;
+  height: 100%;
+  font-size: 16px;
+  line-height: 18px;
+  font-weight: bold;
+  animation: fall linear infinite;
+  white-space: nowrap;
+  text-shadow: 0 0 8px var(--matrix-main);
+}
+
+.matrix-column::before {
+  content: "Ayka enerji EMRE GÖÇER YAVUZ BAYRAKTAR AYKA MATRIX KADİR YÜKSEL AYŞE YÜKSEL GÜLİZAR MAMA Ayka enerji EMRE GÖÇER YAVUZ BAYRAKTAR AYKA MATRIX KADİR YÜKSEL GÜLİZAR MAMA AYŞE YÜKSEL </> {]}";
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--matrix-highlight, #ffffff) 0%,
+    var(--matrix-highlight, #ffffff) 5%,
+    var(--matrix-main, #00ff41) 10%,
+    var(--matrix-main, #00ff41) 20%,
+    var(--matrix-dark1, #00dd33) 30%,
+    var(--matrix-dark2, #00bb22) 40%,
+    var(--matrix-dark3, #009911) 50%,
+    var(--matrix-dark4, #007700) 60%,
+    var(--matrix-dark5, #005500) 70%,
+    var(--matrix-dark6, #003300) 80%,
+    var(--matrix-fade, rgba(0, 51, 0, 0.5)) 90%,
+    transparent 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  writing-mode: vertical-lr;
+  letter-spacing: 0px;
+  text-orientation: upright;
+}
+
+/* --- Renk Temaları --- */
+.matrix-green .matrix-column { --matrix-highlight: #ffffff; --matrix-main: #00ff41; --matrix-dark1: #00dd33; --matrix-dark2: #00bb22; --matrix-dark3: #009911; --matrix-dark4: #007700; --matrix-dark5: #005500; --matrix-dark6: #003300; --matrix-fade: rgba(0, 51, 0, 0.5); }
+.matrix-purple .matrix-column { --matrix-highlight: #ffffff; --matrix-main: #c084fc; --matrix-dark1: #a855f7; --matrix-dark2: #9333ea; --matrix-dark3: #7e22ce; --matrix-dark4: #6b21a8; --matrix-dark5: #581c87; --matrix-dark6: #4c1d95; --matrix-fade: rgba(76, 29, 149, 0.5); }
+.matrix-blue .matrix-column { --matrix-highlight: #ffffff; --matrix-main: #60a5fa; --matrix-dark1: #3b82f6; --matrix-dark2: #2563eb; --matrix-dark3: #1d4ed8; --matrix-dark4: #1e40af; --matrix-dark5: #1e3a8a; --matrix-dark6: #1c3d52; --matrix-fade: rgba(30, 58, 138, 0.5); }
+.matrix-red .matrix-column { --matrix-highlight: #ffffff; --matrix-main: #f87171; --matrix-dark1: #ef4444; --matrix-dark2: #dc2626; --matrix-dark3: #b91c1c; --matrix-dark4: #991b1b; --matrix-dark5: #7f1d1d; --matrix-dark6: #450a0a; --matrix-fade: rgba(69, 10, 10, 0.5); }
+.matrix-yellow .matrix-column { --matrix-highlight: #000000; --matrix-main: #facc15; --matrix-dark1: #eab308; --matrix-dark2: #ca8a04; --matrix-dark3: #a16207; --matrix-dark4: #854d0e; --matrix-dark5: #713f12; --matrix-dark6: #422006; --matrix-fade: rgba(66, 32, 6, 0.5); }
+
+
+/* Animasyon Gecikmeleri ve Süreleri */
+.matrix-column:nth-child(1) { left: 0px; }
+.matrix-column:nth-child(2) { left: 25px; }
+.matrix-column:nth-child(3) { left: 50px; }
+.matrix-column:nth-child(4) { left: 75px; }
+.matrix-column:nth-child(5) { left: 100px; }
+.matrix-column:nth-child(6) { left: 125px; }
+.matrix-column:nth-child(7) { left: 150px; }
+.matrix-column:nth-child(8) { left: 175px; }
+.matrix-column:nth-child(9) { left: 200px; }
+.matrix-column:nth-child(10) { left: 225px; }
+.matrix-column:nth-child(11) { left: 250px; }
+.matrix-column:nth-child(12) { left: 275px; }
+.matrix-column:nth-child(13) { left: 300px; }
+.matrix-column:nth-child(14) { left: 325px; }
+.matrix-column:nth-child(15) { left: 350px; }
+.matrix-column:nth-child(16) { left: 375px; }
+.matrix-column:nth-child(17) { left: 400px; }
+.matrix-column:nth-child(18) { left: 425px; }
+.matrix-column:nth-child(19) { left: 450px; }
+.matrix-column:nth-child(20) { left: 475px; }
+.matrix-column:nth-child(21) { left: 500px; }
+.matrix-column:nth-child(22) { left: 525px; }
+.matrix-column:nth-child(23) { left: 550px; }
+.matrix-column:nth-child(24) { left: 575px; }
+.matrix-column:nth-child(25) { left: 600px; }
+.matrix-column:nth-child(26) { left: 625px; }
+.matrix-column:nth-child(27) { left: 650px; }
+.matrix-column:nth-child(28) { left: 675px; }
+.matrix-column:nth-child(29) { left: 700px; }
+.matrix-column:nth-child(30) { left: 725px; }
+.matrix-column:nth-child(31) { left: 750px; }
+.matrix-column:nth-child(32) { left: 775px; }
+.matrix-column:nth-child(33) { left: 800px; }
+.matrix-column:nth-child(34) { left: 825px; }
+.matrix-column:nth-child(35) { left: 850px; }
+.matrix-column:nth-child(36) { left: 875px; }
+.matrix-column:nth-child(37) { left: 900px; }
+.matrix-column:nth-child(38) { left: 925px; }
+.matrix-column:nth-child(39) { left: 950px; }
+.matrix-column:nth-child(40) { left: 975px; }
+
+@keyframes fall {
+  0% { transform: translateY(-10%); opacity: 1; }
+  100% { transform: translateY(200%); opacity: 0; }
+}
+

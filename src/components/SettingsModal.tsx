@@ -10,7 +10,13 @@ import { PlayCircle } from "lucide-react";
 
 const supabase = createClient();
 const backgroundImages = Array.from({ length: 15 }, (_, i) => `/backgrounds/bg${i + 1}.jpg`);
-
+const matrixThemes = [
+  { id: 'matrix-green', name: 'Yeşil', color: '#22c55e' },
+  { id: 'matrix-purple', name: 'Mor', color: '#a855f7' },
+  { id: 'matrix-blue', name: 'Mavi', color: '#3b82f6' },
+  { id: 'matrix-red', name: 'Kırmızı', color: '#ef4444' },
+  { id: 'matrix-yellow', name: 'Sarı', color: '#eab308' },
+];
 type SettingsModalProps = {
   onClose: () => void;
 };
@@ -20,6 +26,7 @@ const availableSounds = [
     { name: 'Bildirim Sesi 2', url: '/sounds/notification2.mp3' },
     { name: 'Bildirim Sesi 3', url: '/sounds/notification3.mp3' },
 ];
+
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const { 
     bg, setBg, 
@@ -28,8 +35,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     blurPx, setBlurPx,
     borderRadiusPx, setBorderRadiusPx,
     dashboardLayout, setDashboardLayout,
-    notificationSoundUrl, setNotificationSoundUrl 
+    notificationSoundUrl, setNotificationSoundUrl,
+    matrixDensity, setMatrixDensity, // BU SATIRI EKLEYİN
+    matrixSpeed, setMatrixSpeed  ,    // BU SATIRI EKLEYİN
+     matrixColorTheme, setMatrixColorTheme 
   } = useSettings();
+
+
 
   const [localLayout, setLocalLayout] = useState(dashboardLayout);
 const playSound = (url: string) => {
@@ -69,7 +81,11 @@ const playSound = (url: string) => {
           glass_blur_px: blurPx,
           glass_border_radius_px: borderRadiusPx,
           notification_sound_url: notificationSoundUrl,
+          matrix_density: matrixDensity, 
+          matrix_speed: matrixSpeed,    
+           matrix_color_theme: matrixColorTheme,  
         },{ onConflict: 'user_id' });
+
         
     if (error) { toast.error("Hata: " + error.message, { id: toastId }); } 
     else { toast.success("Ayarlar başarıyla kaydedildi!", { id: toastId }); onClose(); }
@@ -94,7 +110,36 @@ const playSound = (url: string) => {
                 className={`w-full h-16 object-cover rounded-md cursor-pointer transition-all ${bg === img ? 'ring-2 ring-blue-500 scale-105' : 'opacity-70 hover:opacity-100'}`}
               />
             ))}
+            {matrixThemes.map((theme) => (
+                  <div
+                    key={theme.id}
+                    onClick={() => {
+                      setBg('matrix');
+                      setMatrixColorTheme(theme.id);
+                    }}
+                    title={`Matrix Efekti (${theme.name})`}
+                    style={{ '--theme-color': theme.color } as React.CSSProperties}
+                    className={`w-full h-16 rounded-md cursor-pointer transition-all flex items-center justify-center bg-black text-[var(--theme-color)] font-mono text-xs p-1 border border-transparent hover:border-[var(--theme-color)] ${bg === 'matrix' && matrixColorTheme === theme.id ? 'ring-2 ring-blue-500 scale-105' : 'opacity-70 hover:opacity-100'}`}
+                  >
+                    MATRIX
+                  </div>
+                ))}
           </div>
+           {/* YENİ EKLENECEK BLOK BAŞLANGICI */}
+            {bg.startsWith('matrix') && (
+              <div className="my-6 p-4 rounded-lg bg-black/20 border border-white/10 space-y-4 animate-in fade-in">
+                <h3 className="font-semibold text-center text-lg text-green-400">Matrix Ayarları</h3>
+                <div>
+                    <label htmlFor="matrixDensity" className="font-semibold mb-2 block">Yazı Yoğunluğu (Az ← → Çok): {matrixDensity}%</label>
+                    <input id="matrixDensity" type="range" min="80" max="100" step="5" value={matrixDensity} onChange={(e) => setMatrixDensity(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
+                </div>
+                <div>
+                    <label htmlFor="matrixSpeed" className="font-semibold mb-2 block">Animasyon Hızı (Yavaş ← → Hızlı): {matrixSpeed}</label>
+                    <input id="matrixSpeed" type="range" min="0.5" max="5" step="0.1" value={matrixSpeed} onChange={(e) => setMatrixSpeed(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
+                </div>
+              </div>
+            )}
+            {/* YENİ EKLENECEK BLOK SONU */}
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">

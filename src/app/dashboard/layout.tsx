@@ -1,7 +1,7 @@
 // YOL: src/app/dashboard/layout.tsx
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Sidebar from '@/components/Sidebar';
 import SettingsModal from '@/components/SettingsModal';
 import "react-grid-layout/css/styles.css";
@@ -10,6 +10,36 @@ import { Menu } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { signOutUser } from '@/app/actions';
 import AiAssistant from '@/components/AiAssistant';
+
+// GÜNCELLEME: Matrix bileşeni artık 'theme', 'speed' ve 'density' proplarını alıyor
+const MatrixBackground = ({ theme, speed, density }: { theme: string, speed: number, density: number }) => {
+  // Yoğunluğa göre sütun sayısını hesapla (10-100 arası)
+  const columnCount = useMemo(() => Math.floor(40 * (density / 100)), [density]);
+  // Hıza göre animasyon süresini hesapla (daha düşük değer daha hızlı)
+  const baseDuration = 4;
+  const duration = useMemo(() => Math.max(0.5, baseDuration / (speed / 2)), [speed]);
+  
+  return (
+    <div className={`matrix-container ${theme}`}>
+      {Array.from({ length: 5 }).map((_, patternIndex) => (
+        <div className="matrix-pattern" key={patternIndex}>
+          {Array.from({ length: columnCount }).map((_, columnIndex) => (
+            <div 
+              className="matrix-column" 
+              key={columnIndex}
+              style={{
+                // Her sütun için rastgele bir başlangıç gecikmesi ve ayarlanmış süre ata
+                animationDelay: `-${Math.random() * 5}s`,
+                animationDuration: `${duration + (Math.random() * 2 - 1)}s`,
+              }}
+            ></div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 
 const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
   <div className={`loader-screen ${!isLoading ? 'hidden' : ''}`}>
@@ -28,7 +58,8 @@ const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
 );
 
 function DashboardContainer({ children }: { children: React.ReactNode }) {
-  const { bg, isLoading, playSound, profile } = useSettings();
+  // GÜNCELLEME: Yeni ayarları context'ten alıyoruz
+  const { bg, isLoading, playSound, profile, matrixDensity, matrixSpeed, matrixColorTheme } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -74,15 +105,27 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
       
       <div 
         className="relative min-h-screen w-full bg-cover bg-center bg-fixed transition-all duration-500"
-        style={{ backgroundImage: `url(${bg})` }}
+        style={{ 
+          backgroundImage: !bg.startsWith('matrix') ? `url(${bg})` : 'none',
+          backgroundColor: bg.startsWith('matrix') ? '#000' : 'transparent'
+        }}
       >
+        {/* GÜNCELLEME: Matrix bileşenine ayarları prop olarak geçiyoruz */}
+        {bg === 'matrix' && (
+          <MatrixBackground 
+            theme={matrixColorTheme} 
+            density={matrixDensity} 
+            speed={matrixSpeed} 
+          />
+        )}
+
         <Sidebar 
           mobileOpen={mobileOpen} 
           setMobileOpen={setMobileOpen} 
           isCollapsed={isCollapsed}
           setIsCollapsed={setIsCollapsed}
         />
-        <div className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
+        <div className={`relative z-10 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
           <header className="md:hidden sticky top-0 bg-gray-900/50 backdrop-blur-md p-4 border-b border-white/10 z-20 flex items-center gap-4">
               <button onClick={() => setMobileOpen(true)}>
                  <Menu className="text-white"/>
@@ -97,11 +140,12 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
           {profile && (
             <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 
+                0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
           )}
 
-          <AiAssistant/>
+           <AiAssistant/>
           
           <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border-white/20 shadow-md transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>

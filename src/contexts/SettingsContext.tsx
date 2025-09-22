@@ -1,3 +1,5 @@
+// YOL: src/contexts/SettingsContext.tsx
+
 "use client";
 
 import { createContext, useState, useEffect, useContext, ReactNode, useCallback  } from 'react';
@@ -14,6 +16,7 @@ type Profile = {
   region_id: number | null;
 };
 type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
+// YENİ: Veritabanı user_settings tablosu için tip tanımına yeni alanlar eklendi
 type UserSettings = {
     user_id: string;
     background_url: string | null;
@@ -23,6 +26,9 @@ type UserSettings = {
     glass_border_radius_px: number | null;
     dashboard_layout: DashboardLayoutSettings | null;
     notification_sound_url: string | null;
+    matrix_density: number | null; // YENİ
+    matrix_speed: number | null;   // YENİ
+     matrix_color_theme: string | null; 
 };
 export type WidgetDefinition = {
     id: string;
@@ -41,7 +47,6 @@ export const ALL_WIDGETS: WidgetDefinition[] = [
   { id: 'monthlyLeaveRate', name: 'Aylık İzin Oranı', description: 'Bu ay izin kullanan personellerin toplam personele oranını gösterir.' },
   { id: 'leaveStatusDistribution', name: 'İzin Durumları Dağılımı', description: 'Bekleyen ve nihai onay bekleyen talep sayılarını karşılaştırır.' },
 ];
-
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
   layouts: {
     lg: [
@@ -72,6 +77,7 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
     welcome: true, quickActions: true,
   }
 };
+// YENİ: Context tipine yeni ayarlar eklendi
 type SettingsContextType = {
   supabase: SupabaseClient;
   user: User | null;
@@ -95,9 +101,16 @@ type SettingsContextType = {
   setDashboardLayout: (layout: DashboardLayoutSettings) => void;
   notificationSoundUrl: string;
   setNotificationSoundUrl: (url: string) => void;
+  matrixDensity: number; // YENİ
+  setMatrixDensity: (density: number) => void; // YENİ
+  matrixSpeed: number; // YENİ
+  setMatrixSpeed: (speed: number) => void; // YENİ
+  matrixColorTheme: string; // YENİ
+  setMatrixColorTheme: (theme: string) => void; // YENİ
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -113,6 +126,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [notificationSoundUrl, setNotificationSoundUrl] = useState('/sounds/notification1.mp3');
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   
+  
+  // YENİ: Matrix ayarları için state'ler
+  const [matrixDensity, setMatrixDensity] = useState(50);
+  const [matrixSpeed, setMatrixSpeed] = useState(4);
+
+  
+  const [matrixColorTheme, setMatrixColorTheme] = useState('matrix-green');
+
+  
   const playSound = useCallback((url: string) => {
       if (typeof window === 'undefined' || !audioContext || audioContext.state === 'suspended' || url === 'none') {
           return;
@@ -121,7 +143,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           const audio = new Audio(url);
           audio.play().catch(e => console.error("Ses çalma hatası:", e));
       } catch (e) {
-           console.error("Audio nesnesi oluşturma hatası:", e);
+          console.error("Audio nesnesi oluşturma hatası:", e);
       }
   }, [audioContext]);
   useEffect(() => {
@@ -159,6 +181,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             setBlurPx(userSettings.glass_blur_px === null ? 16 : userSettings.glass_blur_px);
             setBorderRadiusPx(userSettings.glass_border_radius_px === null ? 16 : userSettings.glass_border_radius_px);
             setNotificationSoundUrl(userSettings.notification_sound_url || '/sounds/notification1.mp3');
+            
+            // YENİ: Kayıtlı matrix ayarlarını yükle
+            setMatrixDensity(userSettings.matrix_density ?? 50);
+            setMatrixSpeed(userSettings.matrix_speed ?? 4);
+             setMatrixColorTheme(userSettings.matrix_color_theme ?? 'matrix-green');
+
+
             if (userSettings.dashboard_layout && typeof userSettings.dashboard_layout === 'object') {
               const savedSettings = userSettings.dashboard_layout as Partial<DashboardLayoutSettings>;
               const defaultLayoutMap = new Map((DEFAULT_DASHBOARD_SETTINGS.layouts.lg || []).map(item => [item.i, item]));
@@ -196,7 +225,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     fetchInitialData();
   }, [audioContext]);
-
+  
   const setDashboardLayout = (newLayout: DashboardLayoutSettings) => {
     setDashboardLayoutState(newLayout);
     if (user) { 
@@ -222,8 +251,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     notificationSoundUrl,
     playSound, 
     setNotificationSoundUrl,
+    matrixDensity, // YENİ
+    setMatrixDensity, // YENİ
+    matrixSpeed, // YENİ
+    setMatrixSpeed, // YENİ
+    matrixColorTheme, // YENİ
+    setMatrixColorTheme, // YENİ
   };
-
   return (
     <SettingsContext.Provider value={value}>
       {children}
