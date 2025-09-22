@@ -116,13 +116,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isCollapsed, setIsC
         <div className="absolute inset-0 bg-[url('/noise.png')] pointer-events-none" style={{ opacity: grainEffectOpacity }} />
 
         <div className="relative z-10 flex flex-col h-full">
-          <div className="flex items-center justify-center p-4 h-[69px] border-b border-white/10">
+           <div className="flex items-center justify-center px-4 py-[15px] border-b border-white/10">
             <Image 
               src="/sidebarlogo.png" 
               alt="Portal Logosu" 
               width={isCollapsed ? 32 : 124}
               height={36} 
-              className="transition-all duration-300 my-1"
+              className="transition-all duration-300"
               style={{ height: 'auto' }} 
             />
           </div>
