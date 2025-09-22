@@ -87,7 +87,7 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
               <button onClick={() => setMobileOpen(true)}>
                  <Menu className="text-white"/>
               </button>
-              <h1 className="text-lg font-semibold text-white">İK Portalı</h1>
+              <h1 className="text-lg font-semibold text-white">AYKA MATRİX V0.0.2</h1>
           </header>
           <main>
             {children}
