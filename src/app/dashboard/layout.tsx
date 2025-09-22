@@ -1,3 +1,5 @@
+// YOL: src/app/dashboard/layout.tsx
+
 "use client";
 import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
@@ -31,11 +33,11 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
-  
+
   useEffect(() => {
     const welcomeSoundPlayed = sessionStorage.getItem('welcomeSoundPlayed');
     if (!isLoading && !welcomeSoundPlayed) {
@@ -48,8 +50,6 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
     await signOutUser();
   };
 
-  // DEĞİŞİKLİK: 'if (!isMounted)' bloğundaki yuvarlak spinner kaldırıldı
-  // ve yerine yeni Matrix loader'ı eklendi.
   if (!isMounted) {
     return (
       <div className="loader-screen">
@@ -94,21 +94,21 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
           </main>
         </div>
 
-        <AiAssistant/>
-
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
-          <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border-white/20 shadow-md transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          </button>
-          
           {profile && (
-           <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
+            <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
           )}
+
+          <AiAssistant/>
+          
+          <button onClick={handleLogout} title="Çıkış Yap" className="p-3 rounded-full bg-red-600/50 hover:bg-red-600/80 text-white backdrop-blur-md border-white/20 shadow-md transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </button>
         </div>
 
-        {settingsOpen && (
+       {settingsOpen && (
          <SettingsModal onClose={() => setSettingsOpen(false)} />
        )}
       </div>

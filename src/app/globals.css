@@ -353,3 +353,44 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
     opacity: 0.7;
   }
 }
+
+/* YOL: src/app/globals.css (Dosyanın en altına ekleyin) */
+
+/* --- YENİ ANİMASYONLAR --- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideInFromBottom {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideOutToBottom {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(20px); opacity: 0; }
+}
+
+/* Modal açılış animasyonu için yardımcı sınıf */
+.animate-modal-open {
+  animation: fadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1), slideInFromBottom 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Modal kapanış animasyonu için yardımcı sınıf */
+.animate-modal-close {
+  animation: fadeOut 250ms ease-in forwards, slideOutToBottom 250ms ease-in forwards;
+}
+
+/* Sadece backdrop (arka plan karartması) için animasyon */
+.animate-backdrop-open {
+  animation: fadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-backdrop-close {
+  animation: fadeOut 250ms ease-in forwards;
+}
