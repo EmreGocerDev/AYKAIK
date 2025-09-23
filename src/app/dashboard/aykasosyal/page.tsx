@@ -1,3 +1,5 @@
+// YOL: src/app/dashboard/aykasosyal/page.tsx
+
 "use client";
 
 import GlassCard from "@/components/GlassCard";
@@ -38,7 +40,7 @@ export default function AykaSosyalPage() {
         setPosts(feedPosts as SocialPost[]);
         setLoading(false);
     }, []);
-    
+
     useEffect(() => {
         loadFeed(selectedRegion);
     }, [selectedRegion, loadFeed]);
@@ -51,11 +53,25 @@ export default function AykaSosyalPage() {
                 toast.success(result.message || "Paylaşım başarılı!");
                 formRef.current?.reset();
                 await loadFeed(selectedRegion); 
-            } else {
+             } else {
                 toast.error(result.message || "Paylaşım başarısız.");
             }
         });
     };
+
+    const handlePostUpdate = useCallback((updatedPost: SocialPost) => {
+        setPosts(currentPosts => 
+            currentPosts.map(p => 
+                p.post_id === updatedPost.post_id ? updatedPost : p
+            )
+        );
+    }, []);
+
+    const handlePostDelete = useCallback((postId: number) => {
+        setPosts(currentPosts =>
+            currentPosts.filter(p => p.post_id !== postId)
+        );
+    }, []);
 
     return (
         <div className="p-4 md:p-8 text-white">
@@ -90,9 +106,9 @@ export default function AykaSosyalPage() {
                         </div>
                         {postType === 'event' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 animate-in fade-in duration-300">
-                                <input name="title" required placeholder="Etkinlik Başlığı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
+                                 <input name="title" required placeholder="Etkinlik Başlığı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
                                 <input name="event_datetime" required type="datetime-local" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark]" />
-                                <input name="location" placeholder="Konum (Opsiyonel)" className="w-full sm:col-span-2 bg-black/20 p-3 rounded-lg border border-white/10" />
+                                 <input name="location" placeholder="Konum (Opsiyonel)" className="w-full sm:col-span-2 bg-black/20 p-3 rounded-lg border border-white/10" />
                             </div>
                         )}
                         <textarea name="content" placeholder={postType === 'text' ? "Aklınızdan ne geçiyor?" : "Etkinlik hakkında bir açıklama yazın..."}
@@ -110,15 +126,16 @@ export default function AykaSosyalPage() {
                 ) : (
                     <div className="space-y-6">
                         {posts.length > 0 ? (
-                            posts.map(post => (
+                             posts.map(post => (
                                 <GlassCard key={post.post_id} {...{ tintValue, blurPx, borderRadiusPx, grainOpacity }}>
                                     <PostCard 
                                         post={post} 
                                         currentUserId={currentUserId}
-                                        onActionSuccess={() => loadFeed(selectedRegion)} 
+                                        onPostUpdate={handlePostUpdate}
+                                        onPostDelete={handlePostDelete}
                                     />
                                 </GlassCard>
-                            ))
+                             ))
                         ) : (
                             <div className="text-center text-gray-400 py-10"> <p>Bu bölgede hiç gönderi paylaşılmamış.</p> <p>İlk gönderiyi sen paylaş!</p> </div>
                         )}

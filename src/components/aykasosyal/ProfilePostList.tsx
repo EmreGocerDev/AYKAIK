@@ -1,3 +1,5 @@
+// YOL: src/components/aykasosyal/ProfilePostList.tsx
+
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
@@ -11,6 +13,8 @@ type ProfilePostListProps = {
     profileInfo: {
         full_name: string;
         username: string;
+        // GÜNCELLENDİ: PostCard'a doğru avatarı geçmek için bu bilgiye de ihtiyacımız var.
+        avatar_url: string | null; 
     }
 }
 
@@ -26,6 +30,23 @@ export default function ProfilePostList({ initialPosts, username, profileInfo }:
         fetchUserId();
     }, []);
 
+    // YENİ FONKSİYON: Arayüzdeki gönderi listesini anında güncellemek için
+    const handlePostUpdate = useCallback((updatedPost: SocialPost) => {
+        setPosts(currentPosts => 
+            currentPosts.map(p => 
+                p.post_id === updatedPost.post_id ? updatedPost : p
+            )
+        );
+    }, []);
+
+    // YENİ FONKSİYON: Gönderi silindiğinde arayüzden anında kaldırmak için
+    const handlePostDelete = useCallback((postId: number) => {
+        setPosts(currentPosts =>
+            currentPosts.filter(p => p.post_id !== postId)
+        );
+    }, []);
+
+    // Yorum ekleme/silme sonrası tam yenileme için kullanılacak fonksiyon
     const refreshPosts = useCallback(async () => {
         const data = await getSocialProfileByUsername(username);
         if (data && data.posts) {
@@ -45,9 +66,18 @@ export default function ProfilePostList({ initialPosts, username, profileInfo }:
                         borderRadiusPx={16}
                     >
                         <PostCard 
-                            post={{...post, author_full_name: profileInfo.full_name, author_username: profileInfo.username}} 
+                            // GÜNCELLENDİ: Post objesine doğru yazar bilgilerini ekliyoruz
+                            post={{
+                                ...post, 
+                                author_full_name: profileInfo.full_name, 
+                                author_username: profileInfo.username,
+                                author_avatar_url: profileInfo.avatar_url
+                            }} 
                             currentUserId={currentUserId}
-                            onActionSuccess={refreshPosts} 
+                            // GÜNCELLENDİ: 'onActionSuccess' yerine yeni prop'lar kullanılıyor
+                            onPostUpdate={handlePostUpdate}
+                            onPostDelete={handlePostDelete}
+                            
                         />
                     </GlassCard>
                 ))

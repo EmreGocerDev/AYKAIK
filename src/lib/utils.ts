@@ -1,12 +1,17 @@
 // YOL: src/lib/utils.ts
 
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
 type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
 
-// Bu fonksiyon, 'YYYY-MM-DD' formatındaki tarihleri tüm tarayıcılarda
- // sorunsuz çalışan 'YYYY/MM/DD' formatına çevirir. [cite: 2132, 2133]
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
 export const safeNewDate = (dateString: string | number | Date): Date => {
   if (typeof dateString === 'string') {
-     // Tarih string'i içindeki '-' karakterlerini '/' ile değiştiriyoruz. [cite: 2134]
+    // Tarih string'i içindeki '-' karakterlerini '/' ile değiştiriyoruz.
     return new Date(dateString.replace(/-/g, '/'));
   }
   return new Date(dateString);
@@ -19,26 +24,25 @@ export function calculateWorkingDays(
   weekendConfig: WeekendConfiguration = 'saturday_sunday'
 ): number {
   let count = 0;
-   const currentDate = safeNewDate(startDate); 
-   const lastDate = safeNewDate(endDate); 
+  const currentDate = safeNewDate(startDate);
+  const lastDate = safeNewDate(endDate);
   
   currentDate.setUTCHours(12,0,0,0);
   lastDate.setUTCHours(12,0,0,0);
-
-   while (currentDate <= lastDate) { 
-     const dayOfWeek = currentDate.getUTCDay(); 
+  while (currentDate <= lastDate) {
+    const dayOfWeek = currentDate.getUTCDay();
     const isWeekend = weekendConfig === 'saturday_sunday'
-       ? dayOfWeek === 0 || dayOfWeek === 6 
-       : dayOfWeek === 0; 
+       ? dayOfWeek === 0 || dayOfWeek === 6
+       : dayOfWeek === 0;
       
     const isoDate = currentDate.toISOString().split('T')[0];
     const isHoliday = holidays.includes(isoDate);
-   if (!isWeekend && !isHoliday) {
-       count++; 
+    if (!isWeekend && !isHoliday) {
+      count++;
     }
     
     currentDate.setUTCDate(currentDate.getUTCDate() + 1);
   }
   
-  return count; 
+  return count;
 }

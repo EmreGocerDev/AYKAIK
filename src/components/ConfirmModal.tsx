@@ -58,13 +58,19 @@ export default function ConfirmModal({
             İptal
           </button>
           <button 
-            onClick={handleConfirm} 
-            disabled={isSubmitting}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <Check size={16} />
-            {isSubmitting ? 'İşleniyor...' : 'Onayla ve Sil'}
-          </button>
+  onClick={handleConfirm} 
+  disabled={isSubmitting}
+  className="btn-save-animated bg-red-600 hover:bg-red-700"
+>
+  <div className="svg-wrapper-1">
+    <div className="svg-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+        <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+      </svg>
+    </div>
+  </div>
+  <span>{isSubmitting ? 'İşleniyor...' : 'Onayla ve Sil'}</span>
+</button>
         </div>
       </GlassCard>
     </div>

@@ -8,7 +8,10 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
+// YOL: src/app/aykasosyal/actions.ts (Dosyanın en üstüne ekleyin)
 
+import fs from 'fs/promises';
+import path from 'path';
 import { Resend } from 'resend';
 import PasswordResetEmail from '@/components/emails/PasswordResetEmail';
 import type { HistoryEntry } from '@/app/actions';
@@ -323,33 +326,42 @@ export async function getSocialFeed(regionId?: string) {
     return data || [];
 }
 
+// YOL: src/app/aykasosyal/actions.ts
+
 export async function addSocialComment(postId: number, formData: FormData) {
     const user = await getSocialUser();
-    if (!user) return { success: false, message: 'Yorum yapmak için giriş yapmalısınız.' };
+    if (!user) return { success: false, message: 'Yorum yapmak için giriş yapmalısınız.', data: null };
     
     const content = formData.get('content') as string;
     if (!content || content.trim().length === 0) {
-        return { success: false, message: 'Yorum boş olamaz.' };
+        return { success: false, message: 'Yorum boş olamaz.', data: null };
     }
     
     const supabase = createClient();
-    const { error } = await supabase.from('social_comments').insert({
+    
+    // GÜNCELLENDİ: .select() eklenerek yeni eklenen yorumun verisi geri döndürülüyor.
+    const { data: newComment, error } = await supabase.from('social_comments').insert({
         user_id: user.id,
         post_id: postId,
         content: content.trim()
-    });
+    }).select(`
+        *,
+        author:social_users(id, full_name, username, avatar_url)
+    `).single();
+
     if (error) {
-        return { success: false, message: 'Yorum eklenirken bir hata oluştu.' };
+        return { success: false, message: 'Yorum eklenirken bir hata oluştu.', data: null };
     }
     
     revalidatePath('/dashboard/aykasosyal');
-    return { success: true, message: 'Yorum eklendi.' };
+    return { success: true, message: 'Yorum eklendi.', data: newComment };
 }
-
 
 // =================================================================
 // PROFILE (PROFİL) FONKSİYONLARI (DEĞİŞİKLİK YOK)
 // =================================================================
+// YOL: src/app/aykasosyal/actions.ts
+
 export async function getSocialProfileForEdit() {
     const user = await getSocialUser();
     if (!user) {
@@ -359,44 +371,52 @@ export async function getSocialProfileForEdit() {
         full_name: user.full_name,
         username: user.username,
         bio: user.bio,
-        region_id: user.region_id
+        region_id: user.region_id,
+        avatar_url: user.avatar_url // Bu alanın döndürüldüğünden emin oluyoruz
     };
-}
+ } 
 
-export async function updateSocialProfile(prevState: ActionState, formData: FormData) {
+export async function updateSocialProfile(prevState: ActionState, formData: FormData): Promise<ActionState> {
     const user = await getSocialUser();
-    if (!user) return { success: false, message: 'Yetkisiz işlem.' };
-
+    if (!user) return { success: false, message: 'Yetkisiz işlem.'  };
+    
     const rawFormData = {
         full_name: formData.get('full_name') as string,
         username: formData.get('username') as string,
         bio: formData.get('bio') as string,
-        region_id: formData.get('region_id') ? Number(formData.get('region_id')) : null
+        region_id: formData.get('region_id') ? Number(formData.get('region_id')) : null,
+        // Formdan gelen avatar_url'i alıyoruz
+         avatar_url: formData.get('avatar_url') as string, 
     };
 
     if (!rawFormData.full_name || !rawFormData.username) {
-        return { success: false, message: 'Ad Soyad ve Kullanıcı Adı zorunludur.' };
+        return { success: false, message: 'Ad Soyad ve Kullanıcı Adı zorunludur.'  };
     }
-    
+
     const supabase = createClient();
+    
+    // Veritabanını yeni avatar yolu dahil olmak üzere güncelle
     const { error } = await supabase.from('social_users').update({
         full_name: rawFormData.full_name,
         username: rawFormData.username,
         bio: rawFormData.bio,
-        region_id: rawFormData.region_id
+        region_id: rawFormData.region_id,
+        avatar_url: rawFormData.avatar_url // Seçilen avatarın yolu direkt kaydediliyor.
     }).eq('id', user.id);
-
+    
     if (error) {
         if (error.code === '23505') {
-            return { success: false, message: 'Bu kullanıcı adı zaten alınmış.' };
+            return { success: false, message: 'Bu kullanıcı adı zaten alınmış.'  };
         }
-        return { success: false, message: `Profil güncellenemedi: ${error.message}` };
+         return { success: false, message: `Profil güncellenemedi: ${error.message}` };
     }
     
     revalidatePath('/dashboard/aykasosyal/profil/duzenle');
-    return { success: true, message: 'Profil başarıyla güncellendi!' };
+    revalidatePath('/dashboard/aykasosyal');
+    revalidatePath(`/dashboard/aykasosyal/profil/${rawFormData.username}`);
+    
+    return { success: true, message: 'Profil başarıyla güncellendi!'  };
 }
-
 export async function getSocialProfileByUsername(username: string) {
     const supabase = createClient();
     const currentUser = await getSocialUser();
@@ -716,4 +736,32 @@ export async function getMyAdvanceRequests() {
         personnel_full_name: personnel["ADI SOYADI"],
     }));
     return formattedRequests;
+}
+
+// YOL: src/app/aykasosyal/actions.ts (Bu yeni fonksiyonu ekleyin)
+
+// =================================================================
+// AVATAR FONKSİYONLARI
+// =================================================================
+export async function getAvatarList() {
+    "use server";
+    try {
+        // public/avatars klasörünün sunucudaki yolunu al
+        const avatarsDirectory = path.join(process.cwd(), 'public', 'avatars');
+        
+        // Klasördeki tüm dosyaları oku
+        const filenames = await fs.readdir(avatarsDirectory);
+        
+        // Sadece .png uzantılı dosyaları filtrele
+        const pngFiles = filenames.filter(file => file.endsWith('.png'));
+        
+        // İstemcinin erişebileceği URL yollarına dönüştür (örn: /avatars/avatar-1.png)
+        const avatarPaths = pngFiles.map(file => `/avatars/${file}`);
+        
+        return avatarPaths;
+    } catch (error) {
+        console.error("Avatarlar okunurken hata oluştu:", error);
+        // Hata durumunda boş bir dizi döndürerek uygulamanın çökmesini engelle
+        return [];
+    }
 }

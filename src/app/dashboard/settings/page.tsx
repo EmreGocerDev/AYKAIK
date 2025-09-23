@@ -5,18 +5,15 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { updateSystemSettings } from '@/app/actions';
 import GlassCard from '@/components/GlassCard';
 import toast from 'react-hot-toast';
-
 type SystemSettings = {
     default_annual_leave_days: string;
     weekend_configuration: 'sunday_only' | 'saturday_sunday';
 };
-
 export default function AdminSettingsPage() {
   const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   useEffect(() => {
     const fetchSettings = async () => {
       // DÜZELTME: Kullanılmayan error değişkeni kaldırıldı.
@@ -26,14 +23,14 @@ export default function AdminSettingsPage() {
           acc[key as keyof SystemSettings] = value;
           return acc;
         }, {} as SystemSettings);
-        setSettings(settingsObject);
+  
+       setSettings(settingsObject);
       }
  
        setLoading(false);
     };
     fetchSettings();
   }, [supabase]);
-  
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -46,7 +43,6 @@ export default function AdminSettingsPage() {
     }
     setIsSubmitting(false);
   };
-  
   if (loading) return <div className="p-8 text-white">Ayarlar yükleniyor...</div>;
 
   return (
@@ -57,40 +53,53 @@ export default function AdminSettingsPage() {
           <GlassCard {...{tintValue, blurPx, borderRadiusPx, grainOpacity}}>
             <div className="space-y-6">
               <div>
-                <label htmlFor="leaveDays" className="block text-lg font-semibold mb-2">Varsayılan Yıllık İzin Hakkı</label>
+               
+                 <label htmlFor="leaveDays" className="block text-lg font-semibold mb-2">Varsayılan Yıllık İzin Hakkı</label>
                 <p className="text-sm text-gray-400 mb-2">Yeni eklenen her personele otomatik olarak atanacak olan yıllık izin günü sayısı.</p>
                 <input
                   id="leaveDays"
                   name="default_annual_leave_days"
-                  type="number"
+         
+                   type="number"
                   defaultValue={settings?.default_annual_leave_days}
                   required
                   className="w-full md:w-1/3 bg-black/20 p-3 rounded-lg border border-white/10"
                 />
               </div>
  
+
               
               <div>
                 <label className="block text-lg font-semibold mb-2">Hafta Sonu Tatili</label>
                 <p className="text-sm text-gray-400 mb-2">Puantaj ve iş günü hesaplamalarında hangi günlerin hafta sonu olarak sayılacağını seçin.</p>
   
-                <div className="flex gap-6">
+                <div className="flex 
+ gap-6">
                     <label className="flex items-center gap-2">
                         <input type="radio" name="weekend_configuration" value="saturday_sunday" defaultChecked={settings?.weekend_configuration === 'saturday_sunday'} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"/>
                         <span>Cumartesi ve Pazar</span>
-                    </label>
+               
+                     </label>
                     <label className="flex items-center gap-2">
                         <input type="radio" name="weekend_configuration" value="sunday_only" defaultChecked={settings?.weekend_configuration === 'sunday_only'} className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500"/>
                         <span>Sadece Pazar</span>
-                    </label>
+           
+                     </label>
                 </div>
               </div>
             </div>
           </GlassCard>
           
           <div className="flex justify-end mt-6">
-            <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 font-semibold">
-              {isSubmitting ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+            <button type="submit" disabled={isSubmitting} className="btn-save-animated">
+              <div className="svg-wrapper-1">
+                <div className="svg-wrapper">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+                    <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+                  </svg>
+                </div>
+              </div>
+              <span>{isSubmitting ? 'Kaydediliyor...' : 'Ayarları Kaydet'}</span>
             </button>
           </div>
         </form>

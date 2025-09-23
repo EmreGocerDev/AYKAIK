@@ -12,9 +12,16 @@ import { KeyRound } from "lucide-react";
 function SubmitButton() {
     const { pending } = useFormStatus();
     return (
-        <button type="submit" disabled={pending} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50">
-            {pending ? 'Kaydediliyor...' : 'Yeni Şifreyi Kaydet'}
-        </button>
+        <button type="submit" disabled={pending} className="btn-save-animated w-full justify-center">
+  <div className="svg-wrapper-1">
+    <div className="svg-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+        <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+      </svg>
+    </div>
+  </div>
+  <span>{pending ? 'Kaydediliyor...' : 'Kaydet'}</span>
+</button>
     );
 }
 

@@ -176,10 +176,16 @@ export default function TechnicalScheduleSettingsPage() {
                         </GlassCard>
 
                         <div className="flex justify-end mt-6">
-                            <button type="submit" disabled={isSubmitting || !selectedRegionId} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 font-semibold">
-                                <Save size={18} />
-                                {isSubmitting ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
-                            </button>
+                            <button type="submit" disabled={isSubmitting || !selectedRegionId} className="btn-save-animated">
+  <div className="svg-wrapper-1">
+    <div className="svg-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+        <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+      </svg>
+    </div>
+  </div>
+  <span>{isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}</span>
+</button>
                         </div>
                     </form>
                 )}

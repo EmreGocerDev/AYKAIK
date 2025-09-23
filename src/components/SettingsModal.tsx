@@ -219,7 +219,16 @@ const playSound = (url: string) => {
 
         <div className="flex justify-end gap-4 mt-6">
           <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg">İptal</button>
-          <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg">Kaydet</button>
+          <button onClick={handleSave} className="btn-save-animated">
+  <div className="svg-wrapper-1">
+    <div className="svg-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+        <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+      </svg>
+    </div>
+  </div>
+  <span>Kaydet</span>
+</button>
         </div>
       </div>
     </div>
