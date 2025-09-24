@@ -1,13 +1,34 @@
 // YOL: src/contexts/SettingsContext.tsx
 
 "use client";
-
 import { createContext, useState, useEffect, useContext, ReactNode, useCallback  } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import toast from 'react-hot-toast';
 import { updateUserDashboardLayout, type DashboardLayoutSettings } from '@/app/actions';
 import type { Layout } from 'react-grid-layout';
+
+import { Inter, Bebas_Neue, Roboto_Slab, Source_Code_Pro, Playfair_Display, Bungee, Exo, Permanent_Marker, } from 'next/font/google';
+
+export const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+export const bebasNeue = Bebas_Neue({ subsets: ['latin'], weight: '400', variable: '--font-bebas-neue' });
+export const robotoSlab = Roboto_Slab({ subsets: ['latin'], variable: '--font-roboto-slab' });
+export const sourceCodePro = Source_Code_Pro({ subsets: ['latin'], variable: '--font-source-code-pro' });
+export const playfairDisplay = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair-display' });
+export const bungee = Bungee({ subsets: ['latin'], weight: '400', variable: '--font-bungee' });
+export const exo = Exo({ subsets: ['latin'], variable: '--font-exo' });
+export const permanentMarker = Permanent_Marker({ subsets: ['latin'], weight: '400', variable: '--font-permanent-marker' });
+
+export const availableFonts = [
+    { id: 'inter', name: 'Inter (Varsayılan)', variable: inter.variable },
+    { id: 'bebas_neue', name: 'Bebas Neue (Başlık)', variable: bebasNeue.variable },
+    { id: 'roboto_slab', name: 'Roboto Slab (Serifli)', variable: robotoSlab.variable },
+    { id: 'source_code_pro', name: 'Source Code Pro (Kod)', variable: sourceCodePro.variable },
+    { id: 'playfair_display', name: 'Playfair Display (Şık)', variable: playfairDisplay.variable },
+    { id: 'bungee', name: 'Bungee (Display)', variable: bungee.variable },
+    { id: 'exo', name: 'Exo (Modern)', variable: exo.variable },
+    { id: 'permanent_marker', name: 'Permanent Marker (El Yazısı)', variable: permanentMarker.variable },
+];
 
 const supabase = createClient();
 type Profile = {
@@ -16,7 +37,7 @@ type Profile = {
   region_id: number | null;
 };
 type WeekendConfiguration = 'sunday_only' | 'saturday_sunday';
-// YENİ: Veritabanı user_settings tablosu için tip tanımına yeni alanlar eklendi
+
 type UserSettings = {
     user_id: string;
     background_url: string | null;
@@ -26,10 +47,12 @@ type UserSettings = {
     glass_border_radius_px: number | null;
     dashboard_layout: DashboardLayoutSettings | null;
     notification_sound_url: string | null;
-    matrix_density: number | null; // YENİ
-    matrix_speed: number | null;   // YENİ
-     matrix_color_theme: string | null; 
+    matrix_density: number | null; 
+    matrix_speed: number | null;
+    matrix_color_theme: string | null;
+    font_family: string | null;
 };
+
 export type WidgetDefinition = {
     id: string;
     name: string;
@@ -77,7 +100,7 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardLayoutSettings = {
     welcome: true, quickActions: true,
   }
 };
-// YENİ: Context tipine yeni ayarlar eklendi
+
 type SettingsContextType = {
   supabase: SupabaseClient;
   user: User | null;
@@ -101,17 +124,20 @@ type SettingsContextType = {
   setDashboardLayout: (layout: DashboardLayoutSettings) => void;
   notificationSoundUrl: string;
   setNotificationSoundUrl: (url: string) => void;
-  matrixDensity: number; // YENİ
-  setMatrixDensity: (density: number) => void; // YENİ
-  matrixSpeed: number; // YENİ
-  setMatrixSpeed: (speed: number) => void; // YENİ
-  matrixColorTheme: string; // YENİ
-  setMatrixColorTheme: (theme: string) => void; // YENİ
+  matrixDensity: number;
+  setMatrixDensity: (density: number) => void;
+  matrixSpeed: number;
+  setMatrixSpeed: (speed: number) => void;
+  matrixColorTheme: string;
+  setMatrixColorTheme: (theme: string) => void;
+  fontFamily: string;
+  setFontFamily: (font: string) => void;
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,16 +151,46 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [dashboardLayout, setDashboardLayoutState] = useState<DashboardLayoutSettings>(DEFAULT_DASHBOARD_SETTINGS);
   const [notificationSoundUrl, setNotificationSoundUrl] = useState('/sounds/notification1.mp3');
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  
-  
-  // YENİ: Matrix ayarları için state'ler
   const [matrixDensity, setMatrixDensity] = useState(50);
   const [matrixSpeed, setMatrixSpeed] = useState(4);
-
-  
   const [matrixColorTheme, setMatrixColorTheme] = useState('matrix-green');
+  const [fontFamily, setFontFamily] = useState('inter');
+  // YENİ ve GÜNCELLENMİŞ useEffect
+  useEffect(() => {
+      // Tüm font nesnelerini bir haritada toplayalım
+      const fontMap = {
+        inter: inter,
+        bebas_neue: bebasNeue,
+        roboto_slab: robotoSlab,
+        source_code_pro: sourceCodePro,
+        playfair_display: playfairDisplay,
+        bungee: bungee,                   // YENİ
+        exo2: exo,                       // YENİ
+        permanent_marker: permanentMarker // YENİ
+    };
 
-  
+      // Önce mevcut tüm font sınıflarını body'den kaldıralım
+      document.body.classList.remove(
+        inter.className,
+        bebasNeue.className,
+        robotoSlab.className,
+        sourceCodePro.className,
+        playfairDisplay.className,
+        bungee.className,           // YENİ
+        exo.className,             // YENİ
+        permanentMarker.className   // YENİ
+    );
+
+
+      // Seçili olan fontun sınıfını ekleyelim
+      const selectedFont = fontMap[fontFamily as keyof typeof fontMap];
+      if (selectedFont) {
+          document.body.classList.add(selectedFont.className);
+      }
+  }, [fontFamily]); // Bu sadece fontFamily değiştiğinde çalışacak
+
+  // DÜZELTME: Hatalı useEffect buradan KALDIRILDI.
+
   const playSound = useCallback((url: string) => {
       if (typeof window === 'undefined' || !audioContext || audioContext.state === 'suspended' || url === 'none') {
           return;
@@ -146,11 +202,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           console.error("Audio nesnesi oluşturma hatası:", e);
       }
   }, [audioContext]);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContext) {
         setAudioContext(new window.AudioContext());
     }
   }, [audioContext]);
+  
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -173,6 +231,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                if (!error) { setNotificationCount(count); }
           }
           if (weekendRes.data) setWeekendConfiguration(weekendRes.data.value as WeekendConfiguration);
+          
           if (settingsRes.data) {
             const userSettings = settingsRes.data as UserSettings;
             setBg(userSettings.background_url || "/backgrounds/bg1.jpg");
@@ -181,12 +240,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             setBlurPx(userSettings.glass_blur_px === null ? 16 : userSettings.glass_blur_px);
             setBorderRadiusPx(userSettings.glass_border_radius_px === null ? 16 : userSettings.glass_border_radius_px);
             setNotificationSoundUrl(userSettings.notification_sound_url || '/sounds/notification1.mp3');
-            
-            // YENİ: Kayıtlı matrix ayarlarını yükle
             setMatrixDensity(userSettings.matrix_density ?? 50);
             setMatrixSpeed(userSettings.matrix_speed ?? 4);
-             setMatrixColorTheme(userSettings.matrix_color_theme ?? 'matrix-green');
-
+            setMatrixColorTheme(userSettings.matrix_color_theme ?? 'matrix-green');
+            setFontFamily(userSettings.font_family || 'inter');
 
             if (userSettings.dashboard_layout && typeof userSettings.dashboard_layout === 'object') {
               const savedSettings = userSettings.dashboard_layout as Partial<DashboardLayoutSettings>;
@@ -234,30 +291,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   const value = {
-    supabase,
-    user,
-    profile,
-    isLoading,
-    notificationCount,
-    setNotificationCount,
-    weekendConfiguration,
-    bg, setBg,
-    tintValue, setTintValue,
-    grainOpacity, setGrainOpacity,
-    blurPx, setBlurPx,
-    borderRadiusPx, setBorderRadiusPx,
-    dashboardLayout,
-    setDashboardLayout,
-    notificationSoundUrl,
-    playSound, 
-    setNotificationSoundUrl,
-    matrixDensity, // YENİ
-    setMatrixDensity, // YENİ
-    matrixSpeed, // YENİ
-    setMatrixSpeed, // YENİ
-    matrixColorTheme, // YENİ
-    setMatrixColorTheme, // YENİ
+    supabase, user, profile, isLoading, notificationCount, setNotificationCount,
+    weekendConfiguration, bg, setBg, tintValue, setTintValue, grainOpacity,
+    setGrainOpacity, blurPx, setBlurPx, borderRadiusPx, setBorderRadiusPx,
+    dashboardLayout, setDashboardLayout, notificationSoundUrl, playSound, 
+    setNotificationSoundUrl, matrixDensity, setMatrixDensity, matrixSpeed,
+    setMatrixSpeed, matrixColorTheme, setMatrixColorTheme,
+    fontFamily, setFontFamily,
   };
+
   return (
     <SettingsContext.Provider value={value}>
       {children}

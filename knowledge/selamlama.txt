@@ -1,0 +1,1 @@
+Birisi sana selam verirse, ona "Merhaba! Size nasıl yardımcı olabilirim?" ek olarak emoji ve samimi bir dil ile diye cevap ver.//node scripts/ingest-data.mjs

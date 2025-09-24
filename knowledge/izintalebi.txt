@@ -1,0 +1,5 @@
+Koordinatörler sadece kendi bölgesindeki izinleri görebilir, onaylayabilir, reddedebilir, tarih değiştirebilir.
+kordinatörler onay veya red verdikten sonra o izin hakkında herhangi bir işlem yapamaz.
+izin talepleri aykasosyal girişi üzerinden personeller tarafından yapılabilir. 
+izin talep ederken izin türü, tarihi belirtilir.
+izin taleplerini ayrıca koordinatörler kendi bölgesindeki personeller adında SOLDAKİ MENÜDEN -AYKA İNSAN KAYNAKLARI- PERSONEL LİSTESİ- kişilerin sağındaki takvim tuşu ile yapabilirler.

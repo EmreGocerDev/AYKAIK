@@ -10,15 +10,13 @@ import { Menu } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/contexts/SettingsContext';
 import { signOutUser } from '@/app/actions';
 import AiAssistant from '@/components/AiAssistant';
+// YENİ: Parallax bileşenini import edin
+import ParallaxBackground from '@/components/ParallaxBackground';
 
-// GÜNCELLEME: Matrix bileşeni artık 'theme', 'speed' ve 'density' proplarını alıyor
 const MatrixBackground = ({ theme, speed, density }: { theme: string, speed: number, density: number }) => {
-  // Yoğunluğa göre sütun sayısını hesapla (10-100 arası)
   const columnCount = useMemo(() => Math.floor(40 * (density / 100)), [density]);
-  // Hıza göre animasyon süresini hesapla (daha düşük değer daha hızlı)
   const baseDuration = 4;
   const duration = useMemo(() => Math.max(0.5, baseDuration / (speed / 2)), [speed]);
-  
   return (
     <div className={`matrix-container ${theme}`}>
       {Array.from({ length: 5 }).map((_, patternIndex) => (
@@ -28,7 +26,6 @@ const MatrixBackground = ({ theme, speed, density }: { theme: string, speed: num
               className="matrix-column" 
               key={columnIndex}
               style={{
-                // Her sütun için rastgele bir başlangıç gecikmesi ve ayarlanmış süre ata
                 animationDelay: `-${Math.random() * 5}s`,
                 animationDuration: `${duration + (Math.random() * 2 - 1)}s`,
               }}
@@ -56,19 +53,15 @@ const LoadingScreen = ({ isLoading }: { isLoading: boolean }) => (
     </div>
   </div>
 );
-
 function DashboardContainer({ children }: { children: React.ReactNode }) {
-  // GÜNCELLEME: Yeni ayarları context'ten alıyoruz
   const { bg, isLoading, playSound, profile, matrixDensity, matrixSpeed, matrixColorTheme } = useSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
   useEffect(() => {
     const welcomeSoundPlayed = sessionStorage.getItem('welcomeSoundPlayed');
     if (!isLoading && !welcomeSoundPlayed) {
@@ -76,11 +69,9 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem('welcomeSoundPlayed', 'true');
     }
   }, [isLoading, playSound]);
-
   const handleLogout = async () => {
     await signOutUser();
   };
-
   if (!isMounted) {
     return (
       <div className="loader-screen">
@@ -99,6 +90,26 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // YENİ: Hangi arkaplanın gösterileceğini belirleyen mantık
+  const renderBackground = () => {
+    if (bg === 'parallax') {
+      // GÜNCELLEME: Hangi klasörden resimlerin yükleneceğini burada belirtiyoruz.
+      return <ParallaxBackground folderName="parallax1" />;
+    }
+    if (bg === 'matrix') {
+      return (
+        <MatrixBackground 
+          theme={matrixColorTheme} 
+          density={matrixDensity} 
+          speed={matrixSpeed} 
+        />
+      );
+    }
+    // Diğer durumlar için (statik görseller) null döndürülür,
+    // çünkü onlar `style` prop'u ile ayarlanıyor.
+    return null;
+  };
+
   return (
     <>
       <LoadingScreen isLoading={isLoading} />
@@ -106,18 +117,13 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
       <div 
         className="relative min-h-screen w-full bg-cover bg-center bg-fixed transition-all duration-500"
         style={{ 
-          backgroundImage: !bg.startsWith('matrix') ? `url(${bg})` : 'none',
-          backgroundColor: bg.startsWith('matrix') ? '#000' : 'transparent'
+          // GÜNCELLEME: Parallax aktifken statik arkaplanı devre dışı bırak
+          backgroundImage: bg !== 'matrix' && bg !== 'parallax' ? `url(${bg})` : 'none',
+          backgroundColor: bg === 'matrix' || bg === 'parallax' ? '#000' : 'transparent'
         }}
       >
-        {/* GÜNCELLEME: Matrix bileşenine ayarları prop olarak geçiyoruz */}
-        {bg === 'matrix' && (
-          <MatrixBackground 
-            theme={matrixColorTheme} 
-            density={matrixDensity} 
-            speed={matrixSpeed} 
-          />
-        )}
+        {/* YENİ: Arkaplan render fonksiyonunu çağırıyoruz */}
+        {renderBackground()}
 
         <Sidebar 
           mobileOpen={mobileOpen} 
@@ -127,21 +133,20 @@ function DashboardContainer({ children }: { children: React.ReactNode }) {
         />
         <div className={`relative z-10 transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
           <header className="md:hidden sticky top-0 bg-gray-900/50 backdrop-blur-md p-4 border-b border-white/10 z-20 flex items-center gap-4">
-              <button onClick={() => setMobileOpen(true)}>
+             <button onClick={() => setMobileOpen(true)}>
                  <Menu className="text-white"/>
               </button>
               <h1 className="text-lg font-semibold text-white">AYKA MATRİX V0.0.2</h1>
           </header>
           <main>
             {children}
-          </main>
+         </main>
         </div>
 
         <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-30">
           {profile && (
             <button onClick={() => setSettingsOpen(true)} title="Arayüz Ayarları" className="p-3 rounded-full bg-white/10 backdrop-blur-md border-white/20 shadow-md hover:bg-white/20 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 
-                0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l-.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
           )}
 

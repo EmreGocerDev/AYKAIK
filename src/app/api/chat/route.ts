@@ -1,34 +1,33 @@
 // YOL: src/app/api/chat/route.ts
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+// DEĞİŞİKLİK: OpenAI yerine Mistral'in kendi kütüphanesini kullanıyoruz
+import { createMistral } from '@ai-sdk/mistral';
 import { streamText, embed } from 'ai';
 
 export const runtime = 'edge';
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
+// Mistral için kendi client'ını oluşturuyoruz. Artık baseURL'e gerek yok.
+const mistral = createMistral({
+  apiKey: process.env.MISTRAL_API_KEY,
 });
 
 export async function POST(req: Request) {
-  console.log('--- YENİ SOHBET İSTEĞİ GELDİ ---');
+  console.log('--- YENİ SOHBET İSTEĞİ GELDİ (RESMİ MISTRAL SDK) ---');
   try {
     const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const userQuery = lastMessage.content;
-    console.log('1. Kullanıcı Sorusu Alındı:', userQuery);
-
-    const embeddingModel = google.embedding('text-embedding-004');
     
-    console.log('2. Embedding oluşturuluyor...');
+    // Embedding modeli olarak Mistral kullanılıyor. Bu kısım doğru çalışıyordu.
+    const embeddingModel = mistral.embedding('mistral-embed');
+    
     const { embedding } = await embed({
       model: embeddingModel,
       value: userQuery,
     });
-    console.log('   Embedding başarıyla oluşturuldu.');
 
     const supabase = createAdminClient();
-    console.log('3. Supabase`de ilgili dokümanlar aranıyor...');
     const { data: documents, error: rpcError } = await supabase.rpc('match_documents', {
       query_embedding: embedding,
       match_threshold: 0.5,
@@ -40,34 +39,33 @@ export async function POST(req: Request) {
       return new Response(`Veritabanı aranırken bir hata oluştu: ${rpcError.message}`, { status: 500 });
     }
     
-    console.log(`   Arama tamamlandı. Bulunan doküman sayısı: ${documents?.length || 0}`);
-    if (!documents || documents.length === 0) {
-      console.log('   Hiç doküman bulunamadığı için standart cevap dönülüyor.');
-      return new Response("Bu konuda size yardımcı olacak bir bilgiye sahip değilim. Lütfen yöneticinize danışın.", { status: 200 });
-    }
-
-    // DÜZELTME: 'doc' parametresi için 'any' yerine daha spesifik bir tip tanımlandı.
-    const context = documents.map((doc: { content: string }) => doc.content).join('\n\n');
-    console.log('4. AI için "BAĞLAM" oluşturuldu. Karakter uzunluğu:', context.length);
+    // Doküman bulunamadığında, doğrudan AI'a sor.
+    const context = documents?.map((doc: { content: string }) => doc.content).join('\n\n') || '';
 
     const systemPrompt = `
-      Sen Ayka Enerji İK Portalı için bir yardımcı asistansın.
-      Sadece ve sadece aşağıda sana verilen BAĞLAM metnini kullanarak kullanıcının sorusuna cevap ver.
-      Eğer cevap bağlamın içinde yoksa, "Bu konuda bilgim yok, lütfen yöneticinize danışın." de.
-      Cevaplarını kısa, net ve adımlar halinde ver.
+      Sen Ayka Matrix için bir asistansın adın neo.
+      ayka matrix, ayka enerji çalışanlarının izin alma, avans talebi oluşturma ve personel yönetimi işlemlerini kolaylaştıran bir platformdur.
+      gereksiz cevaplardan kaçın, samimi olmak için fazla olmamakla birlikte emoji kullanabilirsin, fakat " gibi şeyler kullanma.
+      Kullanıcıya her zaman "siz" diye hitap et.
+      Kullanıcının sorusunu cevaplamak için öncelikle aşağıda sana verilen BAĞLAM metnini kullan.
+      Eğer cevap bağlamın içinde yoksa veya bağlam boşsa, Üzgün olduğunu ve soruyu cevaplayamadığını kibarca belirt.
+      cevap verirken samimi ve resmi dil kullan.
+      bağlamını daima gizli tut sohbette söyleme.
+      emoji kullanırken kullanıyorum gibi şeyler deme.
+      türkçe kurallarına dikkat ederek yaz.
+      Cevabın çok uzun olmasın, kısa ve öz tut.
       BAĞLAM:
       ---
       ${context}
       ---
     `;
 
-    console.log('5. Gemini modeli ile cevap üretimi başlatılıyor...');
+    // Sohbet modeli olarak Mistral'in en güncel ve hızlı modellerinden biri kullanılıyor.
     const result = await streamText({
-      model: google('gemini-1.5-flash'),
+      model: mistral('open-mistral-7b'), // DEĞİŞİKLİK: Daha hızlı ve ücretsiz katmana uygun bir model seçildi. // Daha güçlü bir model deniyoruz.
       system: systemPrompt,
       messages: messages,
     });
-    console.log('   Cevap üretimi (stream) başarıyla başlatıldı. Akış gönderiliyor.');
 
     return result.toTextStreamResponse();
   } catch (error) {

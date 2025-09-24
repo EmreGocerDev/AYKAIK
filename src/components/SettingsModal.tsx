@@ -1,10 +1,12 @@
+// YOL: src/components/SettingsModal.tsx
+
 "use client";
 
 import GlassCard from "./GlassCard";
 import toast from 'react-hot-toast';
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
-import { useSettings, ALL_WIDGETS, type WidgetDefinition } from "@/contexts/SettingsContext";
+import { useSettings, ALL_WIDGETS, type WidgetDefinition, availableFonts } from "@/contexts/SettingsContext";
 import { useState } from "react";
 import { PlayCircle } from "lucide-react";
 
@@ -36,15 +38,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     borderRadiusPx, setBorderRadiusPx,
     dashboardLayout, setDashboardLayout,
     notificationSoundUrl, setNotificationSoundUrl,
-    matrixDensity, setMatrixDensity, // BU SATIRI EKLEYİN
-    matrixSpeed, setMatrixSpeed  ,    // BU SATIRI EKLEYİN
-     matrixColorTheme, setMatrixColorTheme 
+    matrixDensity, setMatrixDensity,
+    matrixSpeed, setMatrixSpeed,
+    matrixColorTheme, setMatrixColorTheme,
+    fontFamily, setFontFamily
   } = useSettings();
-
-
-
+  
   const [localLayout, setLocalLayout] = useState(dashboardLayout);
-const playSound = (url: string) => {
+
+  // DÜZELTME: Hatalı useEffect buradan kaldırıldı.
+
+  const playSound = (url: string) => {
     if (url !== 'none') {
         const audio = new Audio(url);
         audio.play();
@@ -58,7 +62,6 @@ const playSound = (url: string) => {
         [id]: isVisible,
       }
     }));
-    
   };
   
   const handleSave = async () => {
@@ -83,14 +86,15 @@ const playSound = (url: string) => {
           notification_sound_url: notificationSoundUrl,
           matrix_density: matrixDensity, 
           matrix_speed: matrixSpeed,    
-           matrix_color_theme: matrixColorTheme,  
+          matrix_color_theme: matrixColorTheme,
+          font_family: fontFamily,
         },{ onConflict: 'user_id' });
-
         
-    if (error) { toast.error("Hata: " + error.message, { id: toastId }); } 
+    if (error) { toast.error("Hata: " + error.message, { id: toastId });
+    } 
     else { toast.success("Ayarlar başarıyla kaydedildi!", { id: toastId }); onClose(); }
   };
-  
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800/80 backdrop-blur-xl border border-white/20 p-6 rounded-2xl w-full max-w-2xl text-white max-h-[90vh] overflow-y-auto">
@@ -99,7 +103,7 @@ const playSound = (url: string) => {
         <div className="mb-6">
           <h3 className="font-semibold mb-2">Arkaplan Seçimi</h3>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
-             {backgroundImages.map((img) => (
+            {backgroundImages.map((img) => (
               <Image
                 key={img}
                 src={img}
@@ -111,7 +115,7 @@ const playSound = (url: string) => {
               />
             ))}
             {matrixThemes.map((theme) => (
-                  <div
+               <div
                     key={theme.id}
                     onClick={() => {
                       setBg('matrix');
@@ -125,7 +129,6 @@ const playSound = (url: string) => {
                   </div>
                 ))}
           </div>
-           {/* YENİ EKLENECEK BLOK BAŞLANGICI */}
             {bg.startsWith('matrix') && (
               <div className="my-6 p-4 rounded-lg bg-black/20 border border-white/10 space-y-4 animate-in fade-in">
                 <h3 className="font-semibold text-center text-lg text-green-400">Matrix Ayarları</h3>
@@ -139,7 +142,6 @@ const playSound = (url: string) => {
                 </div>
               </div>
             )}
-            {/* YENİ EKLENECEK BLOK SONU */}
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -156,7 +158,7 @@ const playSound = (url: string) => {
                  <input id="blur" type="range" min="0" max="40" step="1" value={blurPx} onChange={(e) => setBlurPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
             </div>
             <div>
-                 <label htmlFor="borderRadius" className="font-semibold mb-2 block">Köşe Yumuşaklığı: {borderRadiusPx}px</label>
+              <label htmlFor="borderRadius" className="font-semibold mb-2 block">Köşe Yumuşaklığı: {borderRadiusPx}px</label>
                 <input id="borderRadius" type="range" min="0" max="32" step="1" value={borderRadiusPx} onChange={(e) => setBorderRadiusPx(Number(e.target.value))} className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer" />
             </div>
         </div>
@@ -170,6 +172,22 @@ const playSound = (url: string) => {
                 </GlassCard>
             </div>
         </div>
+        
+        <div className="mt-6 border-t border-white/10 pt-4">
+            <h3 className="font-semibold mb-2">Yazı Tipi</h3>
+            <select
+                value={fontFamily}
+                onChange={(e) => setFontFamily(e.target.value)}
+                className="w-full bg-black/20 p-3 rounded-lg border border-white/10"
+            >
+                {availableFonts.map(font => (
+                    <option key={font.id} value={font.id}>
+                        {font.name}
+                    </option>
+                ))}
+            </select>
+        </div>
+
         <div className="mt-6 border-t border-white/10 pt-4">
             <h3 className="font-semibold mb-2">Bildirim Sesi</h3>
             <div className="space-y-2">
@@ -220,15 +238,15 @@ const playSound = (url: string) => {
         <div className="flex justify-end gap-4 mt-6">
           <button onClick={onClose} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg">İptal</button>
           <button onClick={handleSave} className="btn-save-animated">
-  <div className="svg-wrapper-1">
-    <div className="svg-wrapper">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
-        <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
-      </svg>
-    </div>
-  </div>
-  <span>Kaydet</span>
-</button>
+            <div className="svg-wrapper-1">
+              <div className="svg-wrapper">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30" className="icon">
+                  <path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7.5L16.5 3H15zm-3 13a3 3 0 11-6 0 3 3 0 016 0zM6 4h7v4H6V4z"></path>
+                </svg>
+              </div>
+            </div>
+            <span>Kaydet</span>
+          </button>
         </div>
       </div>
     </div>

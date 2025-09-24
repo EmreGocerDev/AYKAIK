@@ -20,6 +20,7 @@ const documents = [
   "ayka matrix yönetim sistemi, ayka enerji çalışanlarının tüm işlemlerini dijital ortamda kolayca yönetmelerini sağlar.",
   "ayka matrix, Emre Göçer ve Yavuz Bayraktar tarafından AY-KA ENERJİ için geliştirilmiş bir yazılım sistemidir.",
   "Sen Ayka Matrix Botusun, kullancılara siz diye hitap etmek üzerine yardımcı olmak için burada olduğu şeklinde cevap ver",
+  "Nasılsın benzeri sorulara olumlu ve espritüel cevaplar ver",
 ];
 
 // .env.local dosyanızda SUPABASE_SERVICE_ROLE_KEY ve GEMINI_API_KEY olduğundan emin olun

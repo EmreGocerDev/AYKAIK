@@ -1126,3 +1126,52 @@ export async function adminApproveAdvance(requestId: number, notes: string) {
 export async function adminRejectAdvance(requestId: number, notes: string) {
   return updateAdvanceRequest(requestId, 'rejected', notes);
 }
+
+// YOL: src/app/actions.ts (Dosyanın sonuna ekleyin)
+
+import fs from 'fs/promises';
+import path from 'path';
+
+type ParallaxLayer = {
+  src: string;
+  factor: number;
+  zIndex: number;
+};
+
+export async function getParallaxLayers(folderName: string): Promise<ParallaxLayer[]> {
+  "use server";
+  try {
+    // public klasörü içindeki hedef klasörün tam yolunu alıyoruz
+    const parallaxDir = path.join(process.cwd(), 'public', 'parallax', folderName);
+
+    // Klasördeki tüm dosyaları oku
+    const filenames = await fs.readdir(parallaxDir);
+
+    // Sadece .png uzantılı dosyaları alıp doğal sayı sıralaması yap (1.png, 2.png, 10.png gibi)
+    const imageFiles = filenames
+      .filter(file => file.endsWith('.png'))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    if (imageFiles.length === 0) return [];
+    
+    // Hareket faktörünü dinamik olarak hesapla
+    const baseFactor = 0.005;
+    const maxFactor = 0.06;
+    const increment = (maxFactor - baseFactor) / (imageFiles.length - 1 || 1);
+
+    // Her bir resim dosyası için katman objesi oluştur
+    const layers = imageFiles.map((file, index) => ({
+      src: `/parallax/${folderName}/${file}`,
+      // Katman sayısı arttıkça faktör aralığını otomatik ayarla
+      factor: baseFactor + (index * increment),
+      zIndex: index + 1,
+    }));
+    
+    return layers;
+
+  } catch (error) {
+    console.error(`Parallax klasörü ('${folderName}') okunurken hata:`, error);
+    // Hata durumunda boş dizi dön, böylece arayüz bozulmaz
+    return [];
+  }
+}

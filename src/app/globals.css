@@ -49,6 +49,7 @@
 @layer base {
   *, ::before, ::after {
     --tw-content: '';
+    
   }
 }
 html, body {
@@ -714,11 +715,15 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
   ---break---
 */
 
+/* YOL: src/app/globals.css */
+
+/* src/app/globals.css */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    /* Font-family tanımı buradan tamamen kaldırıldı. */
   }
 }
