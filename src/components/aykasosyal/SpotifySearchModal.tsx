@@ -7,6 +7,7 @@ import { searchSpotifyTracks } from '@/app/aykasosyal/actions';
 import { X, Search, Music } from 'lucide-react';
 import Image from 'next/image';
 import GlassCard from '../GlassCard';
+import { useSettings } from '@/contexts/SettingsContext'; // <-- 1. ADIM: useSettings hook'u import edildi
 
 type Track = {
   id: string;
@@ -14,18 +15,18 @@ type Track = {
   artist: string;
   albumArt: string;
 };
-
 type ModalProps = {
   onClose: () => void;
   onTrackSelect: (trackId: string) => void;
 };
-
 export default function SpotifySearchModal({ onClose, onTrackSelect }: ModalProps) {
+  // 2. ADIM: Ayarlar hook'tan alındı
+  const { tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings(); 
+  
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
       if (query.trim().length > 2) {
@@ -36,26 +37,28 @@ export default function SpotifySearchModal({ onClose, onTrackSelect }: ModalProp
             setResults(res.data);
           } else {
             setError(res.message || "Arama başarısız.");
-            setResults([]);
+            setResults([]); //
           }
           setLoading(false);
         });
       } else {
         setResults([]);
       }
-    }, 500); // Kullanıcı yazmayı bıraktıktan 500ms sonra ara
+    }, 500);
 
     return () => clearTimeout(debounceTimer);
   }, [query]);
-
   const handleSelect = (trackId: string) => {
     onTrackSelect(trackId);
     onClose();
   };
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-modal-open">
-      <GlassCard className="w-full max-w-lg max-h-[80vh] flex flex-col">
+      {/* 3. ADIM: Ayarlar GlassCard'a prop olarak eklendi */}
+      <GlassCard 
+        {...{ tintValue, blurPx, borderRadiusPx, grainOpacity }}
+        className="w-full max-w-lg max-h-[80vh] flex flex-col"
+      >
         <div className="flex justify-between items-center mb-4 flex-shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2"><Music /> Spotify da Şarkı Ara</h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10"><X /></button>
