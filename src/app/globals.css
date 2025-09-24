@@ -725,5 +725,6 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
   body {
     @apply bg-background text-foreground;
     /* Font-family tanımı buradan tamamen kaldırıldı. */
+    @apply bg-black text-foreground;
   }
 }

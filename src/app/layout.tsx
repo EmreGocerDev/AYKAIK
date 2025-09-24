@@ -1,14 +1,17 @@
 // YOL: src/app/layout.tsx
 
 import type { Metadata } from "next";
-// Fontları buradan import etmeye devam ediyoruz
 import { inter, bebasNeue, robotoSlab, sourceCodePro, playfairDisplay, bungee, exo2, permanentMarker } from "@/lib/fonts";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import DynamicTitle from "@/components/DynamicTitle"; // Bu bileşeni önceki adımda oluşturmuştuk
 
 export const metadata: Metadata = {
-  title: "İK Yönetim Sistemi",
+  title: "AYKA MATRİX'e bağlandınız.",
   description: "Modern İK Yönetim Portalı",
+  icons: {
+    icon: '/topbarlogo.ico',
+  },
 };
 
 export default function RootLayout({
@@ -18,8 +21,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      {/* KESİNLİKLE BU ŞEKİLDE OLMALI: Tüm fontlar ".variable" ile eklenmeli */}
+      <head>
+        {/*
+          Tarayıcı üst bar rengini SİYAH yapar.
+          Bu en iyi mobil cihazlarda görünür.
+        */}
+        <meta name="theme-color" content="#000000" />
+      </head>
       <body className={`${inter.variable} ${bebasNeue.variable} ${robotoSlab.variable} ${sourceCodePro.variable} ${playfairDisplay.variable} ${bungee.variable} ${exo2.variable} ${permanentMarker.variable}`}>
+        <DynamicTitle
+          activeTitle="AYKA MATRİX'e bağlandınız."
+          inactiveTitle="AYKA MATRİX'ten ayrıldınız. "
+        />
         <Toaster
           position="top-right"
           toastOptions={{
