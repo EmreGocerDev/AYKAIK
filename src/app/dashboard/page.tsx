@@ -104,7 +104,7 @@ const WelcomeWidget = ({ profile, glassCardProps }: { profile: {full_name: strin
         return "İyi akşamlar";
     };
     const randomGreeting = useMemo(() => {
-      const greetings = [ "Merhaba", "Hoş geldiniz", "İyi çalışmalar", "Harika bir gün dilerim" ];
+      const greetings = [ "Merhabalar Efendim", "İyi Günler Demiyorum, Harika Günler Diyorum:)", "İyi çalışmalar", "Harika bir gün dilerim" ];
       return greetings[Math.floor(Math.random() * greetings.length)];
     }, []);
     return (

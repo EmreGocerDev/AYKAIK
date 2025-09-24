@@ -25,12 +25,12 @@ export type SocialPost = {
     like_count: number;
     is_liked_by_user: boolean;
     comments: Comment[] | null;
+    image_url: string | null; // EKLENDİ: Resim URL'si için yeni alan
     event_details: { id: number; post_id: number; title: string; event_datetime: string; location: string | null; description: string | null; } | null;
     rsvp_count: number;
     is_rsvpd_by_user: boolean;
 }
 
-// DÜZELTİLDİ: Prop'lar nihai ve doğru haliyle tanımlandı
 type PostCardProps = { 
     post: SocialPost;
     currentUserId: string | null;
@@ -64,11 +64,10 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
         const newLikedState = !post.is_liked_by_user;
         const newLikeCount = newLikedState ? post.like_count + 1 : post.like_count - 1;
         onPostUpdate({ ...post, is_liked_by_user: newLikedState, like_count: newLikeCount });
-
         startTransition(async () => {
             const result = await toggleSocialLike(post.post_id);
             if (!result.success) {
-                onPostUpdate(post); // Hata durumunda eski hale geri döndür
+                onPostUpdate(post);
                 toast.error(result.message || "İşlem başarısız.");
             }
         });
@@ -78,7 +77,6 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
         const newRsvpState = !post.is_rsvpd_by_user;
         const newRsvpCount = newRsvpState ? post.rsvp_count + 1 : post.rsvp_count - 1;
         onPostUpdate({ ...post, is_rsvpd_by_user: newRsvpState, rsvp_count: newRsvpCount });
-
         startTransition(async () => {
             const result = await toggleRsvpToEvent(post.post_id);
             if (!result.success) {
@@ -111,17 +109,15 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                     toast.success("Gönderi silindi.");
                 } else {
                     toast.error(result.message || "Gönderi silinemedi.");
-                    // Hata durumunda ana sayfadan yenileme tetiklenebilir, şimdilik böyle bırakıyoruz.
                 }
             });
         }
     };
-    
+
     const handleDeleteComment = (commentId: number) => {
         if (window.confirm("Bu yorumu silmek istediğinizden emin misiniz?")) {
             const updatedPost = { ...post, comments: post.comments?.filter(c => c.id !== commentId) || null };
             onPostUpdate(updatedPost);
-
             startTransition(async () => {
                 const result = await deleteSocialComment(commentId);
                  if (result.success) {
@@ -161,6 +157,7 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                         </button>
                     )}
                 </div>
+
                 {post.post_type === 'event' && post.event_details ? (
                     <div className="mt-2 border-l-4 border-cyan-500 pl-4 py-2 bg-black/20 rounded-r-lg">
                         <h3 className="font-bold text-lg text-white">{post.event_details.title}</h3>
@@ -172,6 +169,22 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                     </div>
                 ) : ( <p className="mt-1 text-gray-200 whitespace-pre-wrap">{post.post_content}</p> )}
                 
+                {/* EKLENDİ: Resim gösterme alanı */}
+                {post.image_url && (
+                    <div className="mt-3">
+                        <a href={post.image_url} target="_blank" rel="noopener noreferrer">
+                            <Image
+                                src={post.image_url}
+                                alt="Gönderi resmi"
+                                width={600}
+                                height={600}
+                                className="rounded-xl w-full h-auto max-h-[500px] object-cover border border-white/10"
+                            />
+                        </a>
+                    </div>
+                )}
+                
+                {/* ... (Beğen, yorum yap butonları ve yorumlar bölümü aynı) ... */}
                 <div className="flex items-center gap-6 mt-4 text-gray-400">
                     <button onClick={handleLikeClick} disabled={isTransitioning} className={`flex items-center gap-2 hover:text-red-500 transition-colors ${post.is_liked_by_user ? 'text-red-500' : ''}`}>
                         <Heart size={18} fill={post.is_liked_by_user ? 'currentColor' : 'none'} /> {post.like_count}
@@ -190,7 +203,6 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                         </div>
                     )}
                 </div>
-
                 {showComments && (
                     <div className="mt-4 pt-4 border-t border-white/10 animate-in fade-in duration-300">
                         <form action={handleCommentSubmit} ref={formRef} className="flex items-center gap-2 mb-4">
@@ -199,7 +211,6 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                                 <Send size={16} />
                             </button>
                         </form>
-
                         <div className="space-y-3">
                             {post.comments?.map(comment => (
                                 <div key={comment.id} className="group flex items-start gap-2 text-sm">

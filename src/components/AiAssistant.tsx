@@ -98,7 +98,7 @@ export default function AiAssistant() {
       <div className="flex justify-between items-center p-4 border-b border-white/10 flex-shrink-0">
         <div className="flex items-center gap-3">
           <Bot className="text-blue-400" />
-          <h3 className="font-bold text-lg">Ayka AI Asistan</h3>
+          <h3 className="font-bold text-lg">Ayka AI Asistan (DENEYSEL)</h3>
         </div>
         <button onClick={handleClose} className="p-2 rounded-full hover:bg-white/10">
           <X size={20} />

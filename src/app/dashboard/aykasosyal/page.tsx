@@ -4,12 +4,14 @@
 
 import GlassCard from "@/components/GlassCard";
 import { useSettings } from "@/contexts/SettingsContext";
-import { Send, FileText, CalendarPlus, Filter } from "lucide-react";
-import { useEffect, useState, useTransition, useRef, useCallback } from "react";
+import { Send, FileText, CalendarPlus, Filter, ImagePlus, X } from "lucide-react";
+import { useEffect, useState, useTransition, useRef, useCallback, ChangeEvent } from "react";
 import { createSocialPost, createSocialEvent, getSocialFeed, getCurrentSocialUserId } from "@/app/aykasosyal/actions";
 import PostCard, { SocialPost } from "@/components/aykasosyal/PostCard";
 import toast from "react-hot-toast";
 import type { Region } from "@/types/index";
+import imageCompression from 'browser-image-compression';
+import Image from "next/image";
 
 export default function AykaSosyalPage() {
     const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
@@ -21,6 +23,11 @@ export default function AykaSosyalPage() {
     const [regions, setRegions] = useState<Region[]>([]);
     const [selectedRegion, setSelectedRegion] = useState('all');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    // Resim dosyası ve önizlemesi için state'ler
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -45,32 +52,89 @@ export default function AykaSosyalPage() {
         loadFeed(selectedRegion);
     }, [selectedRegion, loadFeed]);
 
+    // Resim seçildiğinde çalışan fonksiyon
+    const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    // Seçilen resmi kaldıran fonksiyon
+    const removeImage = () => {
+        setImageFile(null);
+        setImagePreview(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    // Form gönderimini yöneten fonksiyon (Resim yükleme ve optimizasyon dahil)
     const handleFormSubmit = async (formData: FormData) => {
-        const actionToCall = postType === 'text' ? createSocialPost : createSocialEvent;
         startPostingTransition(async () => {
+            let imageUrl: string | null = null;
+
+            // 1. Eğer resim seçildiyse, optimize et ve yükle
+            if (imageFile) {
+                const options = {
+                    maxSizeMB: 1, // Max dosya boyutu 1MB
+                    maxWidthOrHeight: 1280, // En uzun kenar max 1280px
+                    useWebWorker: true,
+                };
+                try {
+                    const compressedFile = await imageCompression(imageFile, options);
+                    
+                    const filePath = `${currentUserId}/${Date.now()}_${compressedFile.name}`;
+                    
+                    const { data, error: uploadError } = await supabase.storage
+                        .from('social_posts')
+                        .upload(filePath, compressedFile);
+
+                    if (uploadError) {
+                        throw new Error(`Resim yüklenemedi: ${uploadError.message}`);
+                    }
+                    
+                    // Yüklenen resmin public URL'ini al
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('social_posts')
+                        .getPublicUrl(data.path);
+                    
+                    imageUrl = publicUrl;
+
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.";
+                    toast.error(message);
+                    return;
+                }
+            }
+            
+            // 2. FormData'ya resim URL'ini ekle (varsa)
+            if (imageUrl) {
+                formData.append('image_url', imageUrl);
+            }
+
+            // 3. Gönderiyi oluşturmak için action'ı çağır
+            const actionToCall = postType === 'text' ? createSocialPost : createSocialEvent;
             const result = await actionToCall(formData);
+
             if (result.success) {
                 toast.success(result.message || "Paylaşım başarılı!");
                 formRef.current?.reset();
-                await loadFeed(selectedRegion); 
-             } else {
+                removeImage(); // Formu ve resmi temizle
+                await loadFeed(selectedRegion);
+            } else {
                 toast.error(result.message || "Paylaşım başarısız.");
             }
         });
     };
 
     const handlePostUpdate = useCallback((updatedPost: SocialPost) => {
-        setPosts(currentPosts => 
-            currentPosts.map(p => 
-                p.post_id === updatedPost.post_id ? updatedPost : p
-            )
-        );
+        setPosts(currentPosts => currentPosts.map(p => p.post_id === updatedPost.post_id ? updatedPost : p));
     }, []);
 
     const handlePostDelete = useCallback((postId: number) => {
-        setPosts(currentPosts =>
-            currentPosts.filter(p => p.post_id !== postId)
-        );
+        setPosts(currentPosts => currentPosts.filter(p => p.post_id !== postId));
     }, []);
 
     return (
@@ -79,7 +143,7 @@ export default function AykaSosyalPage() {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold">AykaSosyal Akışı</h1>
                 </div>
-
+               
                 <GlassCard {...{ tintValue, blurPx, borderRadiusPx, grainOpacity }} className="mb-6 !p-4">
                     <div className="flex items-center gap-3">
                         <Filter size={18} className="text-gray-400"/>
@@ -100,20 +164,39 @@ export default function AykaSosyalPage() {
                 
                 <GlassCard {...{ tintValue, blurPx, borderRadiusPx, grainOpacity }} className="mb-8">
                     <form action={handleFormSubmit} ref={formRef}>
-                         <div className="flex items-center gap-2 mb-3">
+                        <div className="flex items-center gap-2 mb-3">
                             <button type="button" onClick={() => setPostType('text')} className={`px-4 py-2 text-sm rounded-full flex items-center gap-2 ${postType === 'text' ? 'bg-cyan-600 text-white' : 'bg-black/20 text-gray-300'}`}> <FileText size={16}/> Yazı Paylaş </button>
                             <button type="button" onClick={() => setPostType('event')} className={`px-4 py-2 text-sm rounded-full flex items-center gap-2 ${postType === 'event' ? 'bg-cyan-600 text-white' : 'bg-black/20 text-gray-300'}`}> <CalendarPlus size={16}/> Etkinlik Oluştur </button>
                         </div>
+
                         {postType === 'event' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 animate-in fade-in duration-300">
-                                 <input name="title" required placeholder="Etkinlik Başlığı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
+                               <input name="title" required placeholder="Etkinlik Başlığı" className="w-full bg-black/20 p-3 rounded-lg border border-white/10" />
                                 <input name="event_datetime" required type="datetime-local" className="w-full bg-black/20 p-3 rounded-lg border border-white/10 [color-scheme:dark]" />
-                                 <input name="location" placeholder="Konum (Opsiyonel)" className="w-full sm:col-span-2 bg-black/20 p-3 rounded-lg border border-white/10" />
+                                <input name="location" placeholder="Konum (Opsiyonel)" className="w-full sm:col-span-2 bg-black/20 p-3 rounded-lg border border-white/10" />
                             </div>
                         )}
+                    
                         <textarea name="content" placeholder={postType === 'text' ? "Aklınızdan ne geçiyor?" : "Etkinlik hakkında bir açıklama yazın..."}
                             className="w-full bg-black/20 p-3 rounded-lg border border-white/10" rows={3} maxLength={280} required />
-                        <div className="flex justify-end items-center mt-3">
+                        
+                        {/* Resim Önizleme Alanı */}
+                        {imagePreview && (
+                            <div className="mt-4 relative">
+                                <Image src={imagePreview} alt="Önizleme" width={500} height={500} className="rounded-lg w-full h-auto max-h-96 object-contain" />
+                                <button type="button" onClick={removeImage} className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white hover:bg-black/80">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex justify-between items-center mt-3">
+                            {/* Resim Ekleme Butonu */}
+                            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageChange} className="hidden" />
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-cyan-400 hover:bg-white/10 rounded-full" title="Resim Ekle">
+                                <ImagePlus size={20} />
+                            </button>
+                            
                             <button type="submit" className="flex items-center gap-2 bg-cyan-600 px-4 py-2 rounded-lg hover:bg-cyan-700 disabled:opacity-50" disabled={isPosting}>
                                 <Send size={16} /> {isPosting ? 'Paylaşılıyor...' : 'Paylaş'}
                             </button>
@@ -126,7 +209,7 @@ export default function AykaSosyalPage() {
                 ) : (
                     <div className="space-y-6">
                         {posts.length > 0 ? (
-                             posts.map(post => (
+                            posts.map(post => (
                                 <GlassCard key={post.post_id} {...{ tintValue, blurPx, borderRadiusPx, grainOpacity }}>
                                     <PostCard 
                                         post={post} 
@@ -135,7 +218,7 @@ export default function AykaSosyalPage() {
                                         onPostDelete={handlePostDelete}
                                     />
                                 </GlassCard>
-                             ))
+                            ))
                         ) : (
                             <div className="text-center text-gray-400 py-10"> <p>Bu bölgede hiç gönderi paylaşılmamış.</p> <p>İlk gönderiyi sen paylaş!</p> </div>
                         )}

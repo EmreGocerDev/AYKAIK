@@ -268,26 +268,41 @@ export async function getMyPersonnelInfo() {
 // =================================================================
 // FEED (GÖNDERİ AKIŞI) FONKSİYONLARI (DEĞİŞİKLİK YOK)
 // =================================================================
+// ... (dosyanın üst kısmı aynı)
+
+// YOL: src/app/aykasosyal/actions.ts
+
+// ... (dosyanın üstündeki diğer kodlar aynı kalacak)
+
 export async function createSocialPost(formData: FormData) {
     const user = await getSocialUser();
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
 
     const content = formData.get('content') as string;
+    // EKLENDİ: FormData'dan image_url'i alıyoruz
+    const imageUrl = formData.get('image_url') as string | null;
+
     if (!content || content.trim().length === 0) {
         return { success: false, message: 'Gönderi boş olamaz.' };
     }
 
     const supabase = createClient();
+    // EKLENDİ: image_url'i veritabanına ekliyoruz
     const { error } = await supabase.from('social_posts').insert({
         user_id: user.id,
-        content: content.trim()
+        content: content.trim(),
+        image_url: imageUrl, 
     });
+
     if (error) {
         return { success: false, message: `Gönderi oluşturulamadı: ${error.message}` };
     }
     revalidatePath('/dashboard/aykasosyal');
     return { success: true, message: 'Gönderi paylaşıldı!' };
 }
+
+// ... (dosyanın altındaki diğer kodlar aynı kalacak)
+// ... (dosyanın geri kalanı aynı)
 
 export async function toggleSocialLike(postId: number) {
     const user = await getSocialUser();
@@ -315,14 +330,21 @@ export async function getSocialFeed(regionId?: string) {
     const user = await getSocialUser();
     const currentUserId = user ? user.id : '00000000-0000-0000-0000-000000000000';
     const regionParam = (!regionId || regionId === 'all') ? null : Number(regionId);
-    
     const supabase = createClient();
+    
+    console.log("--- getSocialFeed Fonksiyonu Çağrıldı. Parametreler:", { currentUserId, regionParam });
+
     const { data, error } = await supabase.rpc('get_social_feed', {
         current_user_id: currentUserId,
         filter_region_id: regionParam
     });
 
-    if(error) console.error("Feed Error:", error);
+    if (error) {
+        console.error("--- getSocialFeed RPC Hatası ---:", JSON.stringify(error, null, 2));
+    } else {
+        console.log("--- getSocialFeed RPC Sonucu ---:", JSON.stringify(data, null, 2));
+    }
+
     return data || [];
 }
 
