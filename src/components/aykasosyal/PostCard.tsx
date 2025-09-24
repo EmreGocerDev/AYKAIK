@@ -26,6 +26,7 @@ export type SocialPost = {
     is_liked_by_user: boolean;
     comments: Comment[] | null;
     image_url: string | null; // EKLENDİ: Resim URL'si için yeni alan
+    spotify_track_id: string | null;
     event_details: { id: number; post_id: number; title: string; event_datetime: string; location: string | null; description: string | null; } | null;
     rsvp_count: number;
     is_rsvpd_by_user: boolean;
@@ -182,6 +183,22 @@ export default function PostCard({ post, currentUserId, onPostUpdate, onPostDele
                             />
                         </a>
                     </div>
+                )}
+                {post.spotify_track_id && (
+                  <div className="mt-3">
+                    <iframe
+                      title={`Spotify Embed: ${post.post_id}`}
+                      style={{ borderRadius: '12px' }}
+                      // NİHAİ DÜZELTME: src adresi doğru Spotify GÖMME (EMBED) URL'i ile değiştirildi.
+                      src={`https://open.spotify.com/embed/track/${post.spotify_track_id}?utm_source=generator`}
+                      width="100%"
+                      height="80"
+                      frameBorder="0"
+                      allowFullScreen
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      loading="lazy"
+                    ></iframe>
+                  </div>
                 )}
                 
                 {/* ... (Beğen, yorum yap butonları ve yorumlar bölümü aynı) ... */}

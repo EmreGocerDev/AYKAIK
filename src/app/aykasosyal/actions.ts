@@ -18,7 +18,8 @@ import type { HistoryEntry } from '@/app/actions';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const SESSION_COOKIE_NAME = 'aykasosyal_session';
-
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 type ActionState = {
     success: boolean;
     message: string;
@@ -279,19 +280,20 @@ export async function createSocialPost(formData: FormData) {
     if (!user) return { success: false, message: 'Yetkisiz işlem.' };
 
     const content = formData.get('content') as string;
-    // EKLENDİ: FormData'dan image_url'i alıyoruz
     const imageUrl = formData.get('image_url') as string | null;
+    // YENİ: Formdan spotify_track_id'yi alıyoruz
+    const spotifyTrackId = formData.get('spotify_track_id') as string | null;
 
     if (!content || content.trim().length === 0) {
         return { success: false, message: 'Gönderi boş olamaz.' };
     }
 
     const supabase = createClient();
-    // EKLENDİ: image_url'i veritabanına ekliyoruz
     const { error } = await supabase.from('social_posts').insert({
         user_id: user.id,
         content: content.trim(),
         image_url: imageUrl, 
+        spotify_track_id: spotifyTrackId, // YENİ: Veritabanına ekliyoruz
     });
 
     if (error) {
@@ -786,4 +788,89 @@ export async function getAvatarList() {
         // Hata durumunda boş bir dizi döndürerek uygulamanın çökmesini engelle
         return [];
     }
+}
+
+async function getSpotifyAccessToken() {
+  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+    throw new Error("Spotify kimlik bilgileri .env.local dosyasında eksik.");
+  }
+
+  // DÜZELTME: API adresi accounts.spotify.com olarak düzeltildi.
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+    },
+    body: 'grant_type=client_credentials',
+    cache: 'no-store' // Token'ın önbelleğe alınmasını engelle
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error_description || "Spotify token alınamadı.");
+  }
+  return data.access_token;
+}
+type SpotifyArtist = {
+  name: string;
+};
+
+type SpotifyImage = {
+  url: string;
+};
+
+type SpotifyAlbum = {
+  images: SpotifyImage[];
+};
+
+type SpotifyTrackItem = {
+  id: string;
+  name: string;
+  artists: SpotifyArtist[];
+  album: SpotifyAlbum;
+};
+export async function searchSpotifyTracks(query: string) {
+  if (!query || query.trim().length < 2) {
+    return { success: false, data: [], message: 'Lütfen en az 2 karakter girin.' }; // [cite: 646, 647]
+  }
+
+  try {
+    const accessToken = await getSpotifyAccessToken();
+    const searchParams = new URLSearchParams({
+      q: query,
+      type: 'track',
+      limit: '10',
+      market: 'TR'
+    }); // [cite: 648]
+    
+    const response = await fetch(`https://api.spotify.com/v1/search?${searchParams.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    }); // [cite: 649]
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `Spotify API Hatası: ${response.statusText}`); // [cite: 650, 651]
+    }
+    
+    const data = await response.json();
+    
+    // DÜZELTME: 'any' yerine oluşturulan özel tipler kullanıldı.
+    const tracks = data.tracks.items.map((item: SpotifyTrackItem) => ({
+      id: item.id,
+      name: item.name,
+      artist: item.artists.map((artist: SpotifyArtist) => artist.name).join(', '),
+      albumArt: item.album.images[2]?.url || item.album.images[1]?.url || item.album.images[0]?.url || '/default-album.png'
+    })); // 
+    
+    return { success: true, data: tracks }; // [cite: 653]
+
+  } catch (error) {
+    const message = error instanceof Error ?
+    error.message : "Bilinmeyen bir hata oluştu."; // [cite: 653, 654]
+    console.error("Spotify Arama Hatası:", message);
+    return { success: false, data: [], message }; // [cite: 654, 655]
+  }
 }

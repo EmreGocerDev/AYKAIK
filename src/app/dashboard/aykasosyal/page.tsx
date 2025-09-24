@@ -4,7 +4,7 @@
 
 import GlassCard from "@/components/GlassCard";
 import { useSettings } from "@/contexts/SettingsContext";
-import { Send, FileText, CalendarPlus, Filter, ImagePlus, X } from "lucide-react";
+import { Send, FileText, CalendarPlus, Filter, ImagePlus, X, Music  } from "lucide-react";
 import { useEffect, useState, useTransition, useRef, useCallback, ChangeEvent } from "react";
 import { createSocialPost, createSocialEvent, getSocialFeed, getCurrentSocialUserId } from "@/app/aykasosyal/actions";
 import PostCard, { SocialPost } from "@/components/aykasosyal/PostCard";
@@ -12,7 +12,7 @@ import toast from "react-hot-toast";
 import type { Region } from "@/types/index";
 import imageCompression from 'browser-image-compression';
 import Image from "next/image";
-
+import SpotifySearchModal from "@/components/aykasosyal/SpotifySearchModal"; // <-- YENİ
 export default function AykaSosyalPage() {
     const { supabase, tintValue, blurPx, borderRadiusPx, grainOpacity } = useSettings();
     const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -28,6 +28,8 @@ export default function AykaSosyalPage() {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isSpotifyModalOpen, setIsSpotifyModalOpen] = useState(false);
+    const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -72,9 +74,12 @@ export default function AykaSosyalPage() {
 
     // Form gönderimini yöneten fonksiyon (Resim yükleme ve optimizasyon dahil)
     const handleFormSubmit = async (formData: FormData) => {
+        if (selectedTrackId) {
+        formData.append('spotify_track_id', selectedTrackId);
+    }
         startPostingTransition(async () => {
             let imageUrl: string | null = null;
-
+            
             // 1. Eğer resim seçildiyse, optimize et ve yükle
             if (imageFile) {
                 const options = {
@@ -122,6 +127,7 @@ export default function AykaSosyalPage() {
                 toast.success(result.message || "Paylaşım başarılı!");
                 formRef.current?.reset();
                 removeImage(); // Formu ve resmi temizle
+                setSelectedTrackId(null);
                 await loadFeed(selectedRegion);
             } else {
                 toast.error(result.message || "Paylaşım başarısız.");
@@ -189,6 +195,18 @@ export default function AykaSosyalPage() {
                                 </button>
                             </div>
                         )}
+                        {selectedTrackId && (
+                            <div className="mt-4 p-2 bg-black/20 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-sm">
+                                    <Music size={16} className="text-green-400" />
+                                    <span className="text-gray-300">Şarkı Eklendi</span>
+                                </div>
+                                <button type="button" onClick={() => setSelectedTrackId(null)} className="p-1 rounded-full hover:bg-white/10">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        )}
+
 
                         <div className="flex justify-between items-center mt-3">
                             {/* Resim Ekleme Butonu */}
@@ -196,10 +214,13 @@ export default function AykaSosyalPage() {
                             <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-cyan-400 hover:bg-white/10 rounded-full" title="Resim Ekle">
                                 <ImagePlus size={20} />
                             </button>
-                            
+                            <button type="button" onClick={() => setIsSpotifyModalOpen(true)} className="p-2 text-green-400 hover:bg-white/10 rounded-full" title="Spotify'dan Müzik Ekle">
+            <Music size={20} />
+        </button>
                             <button type="submit" className="flex items-center gap-2 bg-cyan-600 px-4 py-2 rounded-lg hover:bg-cyan-700 disabled:opacity-50" disabled={isPosting}>
                                 <Send size={16} /> {isPosting ? 'Paylaşılıyor...' : 'Paylaş'}
                             </button>
+                            
                         </div>
                     </form>
                 </GlassCard>
@@ -225,6 +246,12 @@ export default function AykaSosyalPage() {
                     </div>
                 )}
             </div>
+            {isSpotifyModalOpen && (
+        <SpotifySearchModal 
+            onClose={() => setIsSpotifyModalOpen(false)} 
+            onTrackSelect={setSelectedTrackId} 
+        />
+    )}
         </div>
     );
 }
