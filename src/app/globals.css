@@ -728,3 +728,307 @@ transition: transform 1s cubic-bezier(0.7, 0, 0.3, 1);
     @apply bg-black text-foreground;
   }
 }
+/* YOL: src/app/globals.css (Dosyanın en altına ekleyin) */
+
+
+
+/* YOL: src/app/globals.css */
+
+/* YOL: src/app/globals.css */
+
+/* --- YENİ LANDING PAGE NAVİGASYONU (SADELEŞTİRİLMİŞ HALİ) --- */
+.landing-nav {
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem; /* İkonlar arası boşluk */
+  height: 100%; /* GlassCard'ın yüksekliğini doldurur */
+}
+
+/* Mavi Neon Efekti (Varsayılan) */
+.icon-glow-blue {
+  color: #d1d1d1fc;
+  
+}
+
+/* Kırmızı Neon Efekti (Aktif Durum) */
+.icon-glow-red {
+  color: #ffffff;
+  filter: drop-shadow(0 0 4px #f87171) drop-shadow(0 0 12px #f87171);
+}
+
+/* Aktif olmayan butona hover olunca mavi parlamayı ÇOK DAHA FAZLA artır */
+.landing-nav button:not(.active):hover .icon-glow-blue {
+  color: #cffafe;
+  filter: drop-shadow(0 0 8px #ffffff) drop-shadow(0 0 25px #5eead4);
+}
+
+/* Aktif butona hover olunca kırmızı parlamayı ÇOK DAHA FAZLA artır */
+.landing-nav button.active:hover .icon-glow-red {
+  color: #ffffff;
+  filter: drop-shadow(0 0 10px #f87171) drop-shadow(0 0 30px #f87171);
+}
+
+/* Butonun aktif durumdaki arkaplanı */
+.landing-nav button.active {
+  background-color: rgba(200, 237, 254, 0.289);
+}
+/* YOL: src/app/globals.css */
+
+/* YOL: src/app/globals.css */
+
+/* --- YENİ LANDING PAGE KARTLARI (MOBIL İÇİN GÜNCELLENDİ) --- */
+.card {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  background-color: #000000cc;
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  padding: 12px;
+  gap: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  /* GÜNCELLEME: Mobil için basit bir çerçeve eklendi */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.heading {
+  font-size: 20px;
+  text-transform: capitalize;
+  font-weight: 700;
+  color: white;
+}
+
+.card p:not(.heading) {
+  font-size: 14px;
+  color: #d1d1d1;
+}
+
+.card p:last-child {
+  font-weight: 600;
+}
+
+/* --- Kart Renk Sınıfları (Sadece Yazı Renkleri) --- */
+.card-blue p:last-child { color: #60a5fa; }
+.card-yellow p:last-child { color: #facc15; }
+.card-red p:last-child { color: #f87171; }
+.card-green p:last-child { color: #4ade80; }
+
+
+/* GÜNCELLEME: Tüm parlama ve hover efektleri sadece 768px ve üzeri ekranlarda çalışacak */
+@media (min-width: 768px) {
+  .card {
+    border: none; /* Masaüstünde çerçeveyi kaldırıp parlama efektini kullanıyoruz */
+  }
+
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    left: -5px;
+    margin: auto;
+    width: 210px;
+    height: 210px;
+    border-radius: 10px;
+    filter: blur(3px);
+    z-index: -10;
+    pointer-events: none;
+    transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .card::after {
+    content: "";
+    z-index: -1;
+    position: absolute;
+    inset: 0;
+    transform: translate3d(0, 0, 0) scale(0.95);
+    filter: blur(20px);
+    opacity: 0.5;
+  }
+
+  .card:hover::after {
+    filter: blur(30px);
+  }
+
+  .card:hover::before {
+    transform: rotate(-90deg) scaleX(1.34) scaleY(0.77);
+  }
+
+  /* Kartların arkaplan renkleri */
+  .card-blue::before, .card-blue::after { background: linear-gradient(-45deg, #3b82f6 0%, #60a5fa 100%); }
+  .card-yellow::before, .card-yellow::after { background: linear-gradient(-45deg, #eab308 0%, #facc15 100%); }
+  .card-red::before, .card-red::after { background: linear-gradient(-45deg, #ef4444 0%, #f87171 100%); }
+  .card-green::before, .card-green::after { background: linear-gradient(-45deg, #22c55e 0%, #4ade80 100%); }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* YOL: src/app/globals.css */
+
+/* --- LANDING PAGE İSTATİSTİK KARTLARI --- */
+.stats-container {
+  position: relative;
+  width: 180px;
+  height: 200px;
+  transition: 200ms;
+}
+
+.stats-container:active {
+  width: 175px;
+  height: 195px;
+}
+
+#stats-card {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 16px;
+  transition: 700ms;
+  background-color: rgba(24, 24, 24, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(0px);
+  /* GÜNCELLEME: 3D efekti için bu gerekli */
+  transform-style: preserve-3d;
+}
+
+.stats-number {
+  
+  font-size: 3rem;
+  font-weight: bold;
+  color: rgb(206, 206, 206);
+  /* GÜNCELLEME: Yazıya geçiş efekti eklendi */
+  transition: transform 300ms ease;
+}
+
+.stats-label {
+  font-size: 1rem;
+  color: #a0a0a0;
+  text-align: center;
+  /* GÜNCELLEME: Yazıya geçiş efekti eklendi */
+  transition: transform 300ms ease;
+}
+
+.stats-tracker {
+  position: absolute;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+}
+
+.stats-tracker:hover {
+  cursor: pointer;
+}
+
+.stats-tracker:hover ~ #stats-card {
+  transition: 300ms;
+  filter: brightness(1);
+}
+
+/* GÜNCELLEME: Hover durumunda yazıların ileri çıkmasını sağlayan yeni kural */
+.stats-tracker:hover ~ #stats-card .stats-number {
+  transform: translateZ(35px);
+   color: rgb(255, 234, 0);
+    transition: 400ms;
+   
+}
+.stats-tracker:hover ~ #stats-card .stats-label {
+  transform: translateZ(20px);
+}
+
+.stats-container:hover #stats-card::before {
+  transition: 200ms;
+  content: '';
+  opacity: 80%; /* Hover durumunda opaklık biraz artırıldı */
+}
+
+.stats-canvas {
+  perspective: 800px;
+  inset: 0;
+  z-index: 20;
+  position: absolute;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr 1fr 1fr;
+  gap: 0px 0px;
+  grid-template-areas: "tr-1 tr-2 tr-3 tr-4 tr-5"
+    "tr-6 tr-7 tr-8 tr-9 tr-10"
+    "tr-11 tr-12 tr-13 tr-14 tr-15"
+    "tr-16 tr-17 tr-18 tr-19 tr-20"
+    "tr-21 tr-22 tr-23 tr-24 tr-25";
+}
+
+#stats-card::before {
+  content: '';
+  background: #242424;
+  /* GÜNCELLEME: Parlaklık azaltıldı */
+  filter: blur(0.5rem); /* 2rem'den 1.5rem'e düşürüldü */
+  opacity: 8%;        /* 15%'ten 8%'e düşürüldü */
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  z-index: -1;
+  transition: 300ms;
+}
+
+/* ... Grid alanları ve 3D hover efektleri aynı kalacak ... */
+.tr-1 { grid-area: tr-1; } .tr-2 { grid-area: tr-2; } .tr-3 { grid-area: tr-3; } .tr-4 { grid-area: tr-4; } .tr-5 { grid-area: tr-5; } .tr-6 { grid-area: tr-6; } .tr-7 { grid-area: tr-7; } .tr-8 { grid-area: tr-8; } .tr-9 { grid-area: tr-9; } .tr-10 { grid-area: tr-10; } .tr-11 { grid-area: tr-11; } .tr-12 { grid-area: tr-12; } .tr-13 { grid-area: tr-13; } .tr-14 { grid-area: tr-14; } .tr-15 { grid-area: tr-15; } .tr-16 { grid-area: tr-16; } .tr-17 { grid-area: tr-17; } .tr-18 { grid-area: tr-18; } .tr-19 { grid-area: tr-19; } .tr-20 { grid-area: tr-20; } .tr-21 { grid-area: tr-21; } .tr-22 { grid-area: tr-22; } .tr-23 { grid-area: tr-23; } .tr-24 { grid-area: tr-24; } .tr-25 { grid-area: tr-25; }
+.tr-1:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(20deg) rotateY(-10deg); } .tr-2:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(20deg) rotateY(-5deg); } .tr-3:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(20deg) rotateY(0deg); } .tr-4:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(20deg) rotateY(5deg); } .tr-5:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(20deg) rotateY(10deg); } .tr-6:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(10deg) rotateY(-10deg); } .tr-7:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(10deg) rotateY(-5deg); } .tr-8:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(10deg) rotateY(0deg); } .tr-9:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(10deg) rotateY(5deg); } .tr-10:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(10deg) rotateY(10deg); } .tr-11:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(0deg) rotateY(-10deg); } .tr-12:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(0deg) rotateY(-5deg); } .tr-13:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(0deg) rotateY(0deg); } .tr-14:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(0deg) rotateY(5deg); } .tr-15:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(0deg) rotateY(10deg); } .tr-16:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-10deg) rotateY(-10deg); } .tr-17:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-10deg) rotateY(-5deg); } .tr-18:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-10deg) rotateY(0deg); } .tr-19:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-10deg) rotateY(5deg); } .tr-20:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-10deg) rotateY(10deg); } .tr-21:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-20deg) rotateY(-10deg); } .tr-22:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-20deg) rotateY(-5deg); } .tr-23:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-20deg) rotateY(0deg); } .tr-24:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-20deg) rotateY(5deg); } .tr-25:hover ~ #stats-card { transition: 125ms ease-in-out; transform: rotateX(-20deg) rotateY(10deg); }
+
+.noselect { -webkit-touch-callout: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+
+
+
+/* YOL: src/app/globals.css */
+/* YOL: src/app/globals.css */
+
+/* --- LANDING PAGE HİZMET KARTLARI (YENİ DÜZEN) --- */
+.deck-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 220px;
+  height: 300px;
+  /* position: absolute; kaldırıldı */
+  border-radius: 1rem;
+  background-color: rgba(30, 30, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.3s ease; /* border-color için geçiş eklendi */
+  cursor: pointer;
+  padding: 1rem;
+  text-align: center;
+}
+
+/* Üzerine gelinen kartı öne çıkar */
+.deck-card:hover {
+  z-index: 40;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Tıklanarak SEÇİLEN kart için yukarı çıkma efekti */
+.deck-card.selected {
+  /* Deste mantığı kalktığı için transform basitleştirildi */
+  transform: translateY(-40px) scale(1.05);
+  z-index: 41;
+  border-color: rgba(0, 255, 255, 0.5);
+}

@@ -2,10 +2,10 @@ import { ReactNode } from "react";
 
 export default function GlassCard({
   children,
-  tintValue = 15,
-  blurPx = 16,
+  tintValue = 10,
+  blurPx = 11,
   borderRadiusPx = 16,
-  grainOpacity = 20,
+  grainOpacity = 0,
   className = "",
 }: {
   children: ReactNode;
